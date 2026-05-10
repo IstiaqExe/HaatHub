@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HaatHub - Your Digital হাট</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header" id="main-header">
+        <!-- Top Bar -->
+        <div class="header-topbar">
+            <div class="container">
+                <div class="topbar-content">
+                    <p class="topbar-text">Free delivery on orders above ৳1000</p>
+                    <div class="topbar-actions">
+                        <button class="topbar-link">Help</button>
+                        <button class="topbar-link" id="login-trigger">
+                            <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path></svg>
+                            <span class="login-text">Login</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Header -->
+        <div class="header-main">
+            <div class="container">
+                <div class="header-content">
+                    <!-- Logo -->
+                    <div class="logo" onclick="navigateTo('home')">
+                        <h1>HaatHub</h1>
+                    </div>
+
+                    <!-- Desktop Search -->
+                    <div class="search-bar desktop-only">
+                        <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        <input type="search" placeholder="Search for products..." id="desktop-search">
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="header-actions">
+                        <button class="header-icon-btn mobile-only" id="mobile-search-toggle">
+                            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        </button>
+
+                        <button class="header-icon-btn" id="wishlist-btn">
+                            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"></path></svg>
+                            <span class="badge" id="wishlist-count">0</span>
+                        </button>
+
+                        <button class="header-icon-btn" id="cart-btn" onclick="navigateTo('cart')">
+                            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                            <span class="badge" id="cart-count">0</span>
+                        </button>
+
+                        <button class="header-icon-btn desktop-only" id="profile-menu-btn">
+                            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                        </button>
+
+                        <button class="header-icon-btn mobile-only" id="mobile-menu-btn">
+                            <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Mobile Search -->
+                <div class="mobile-search hidden" id="mobile-search-bar">
+                    <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    <input type="search" placeholder="Search for products..." id="mobile-search">
+                    <button class="close-search" id="close-mobile-search">
+                        <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Categories Bar -->
+        <div class="categories-bar desktop-only">
+            <div class="container">
+                <div class="categories-scroll">
+                    <button class="category-link active" onclick="filterByCategory('all')">All Categories</button>
+                    <button class="category-link" onclick="filterByCategory('Electronics')">Electronics</button>
+                    <button class="category-link" onclick="filterByCategory('Fashion')">Fashion</button>
+                    <button class="category-link" onclick="filterByCategory('Home & Living')">Home & Living</button>
+                    <button class="category-link" onclick="filterByCategory('Beauty')">Beauty</button>
+                    <button class="category-link" onclick="filterByCategory('Sports')">Sports</button>
+                    <button class="category-link flash-sale-link" onclick="navigateTo('products', {flashSale: true})">
+                        <svg class="icon-xs" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        Flash Sales
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Admin Sidebar -->
+    <aside class="admin-sidebar hidden" id="admin-sidebar">
+        <div class="admin-sidebar-header">
+            <h2>HaatHub</h2>
+            <p>Admin Panel</p>
+        </div>
+        <nav class="admin-nav">
+            <button class="admin-nav-back" onclick="navigateTo('home')">
+                <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                Back to Store
+            </button>
+            <a href="#admin-dashboard" class="admin-nav-link active" onclick="navigateTo('admin-dashboard')">
+                <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+                Dashboard
+            </a>
+            <a href="#admin-products" class="admin-nav-link" onclick="navigateTo('admin-products')">
+                <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path></svg>
+                Products
+            </a>
+            <a href="#admin-orders" class="admin-nav-link" onclick="navigateTo('admin-orders')">
+                <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path></svg>
+                Orders
+            </a>
+            <a href="#admin-messages" class="admin-nav-link" onclick="navigateTo('admin-messages')">
+                <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
+                Messages
+            </a>
+            <a href="#admin-analytics" class="admin-nav-link" onclick="navigateTo('admin-analytics')">
+                <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                Analytics
+            </a>
+            <a href="#admin-flash-sales" class="admin-nav-link" onclick="navigateTo('admin-flash-sales')">
+                <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                Flash Sales
+            </a>
+            <a href="#admin-settings" class="admin-nav-link" onclick="navigateTo('admin-settings')">
+                <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                Settings
+            </a>
+        </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main id="main-content">
+        
+        <!-- HOME PAGE -->
+        <div class="page active" id="home-page">
+            <!-- Hero Section -->
+            <section class="hero">
+                <div class="hero-pattern"></div>
+                <div class="container hero-container">
+                    <div class="hero-content">
+                        <div class="hero-badge">
+                            <svg class="icon-xs" fill="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            Limited Time Offers
+                        </div>
+                        <h1 class="hero-title">
+                            <span class="gradient-text">Your Digital হাট</span>
+                        </h1>
+                        <p class="hero-subtitle">Discover curated products with exclusive deals. Cash on Delivery available.</p>
+                        <div class="hero-buttons">
+                            <button class="btn btn-primary btn-lg" onclick="navigateTo('products')">
+                                Shop Now
+                                <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                            </button>
+                            <button class="btn btn-outline btn-lg" onclick="navigateTo('products', {flashSale: true})">
+                                View Flash Sales
+                            </button>
+                        </div>
+                    </div>
+                    <div class="hero-preview desktop-only" id="hero-products">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Flash Sales Section -->
+            <section class="section flash-sales-section" id="flash-sales-home">
+                <div class="container">
+                    <div class="flash-sales-card">
+                        <div class="flash-sales-header">
+                            <div class="flash-sales-title">
+                                <div class="flash-icon">
+                                    <svg class="icon flash-icon-svg" fill="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                </div>
+                                <div>
+                                    <h2 class="section-heading">Flash Sale</h2>
+                                    <p class="flash-subtitle">Limited time offers - Grab them fast!</p>
+                                </div>
+                            </div>
+                            <div class="countdown-large" id="flash-countdown-main">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                        <div class="products-grid" id="flash-sales-grid">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Trending Products -->
+            <section class="section">
+                <div class="container">
+                    <div class="section-header">
+                        <div class="section-title-group">
+                            <div class="section-icon trending-icon">
+                                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                            </div>
+                            <div>
+                                <h2 class="section-heading">Trending Now</h2>
+                                <p class="section-subtitle">Most popular products this week</p>
+                            </div>
+                        </div>
+                        <button class="btn btn-ghost" onclick="navigateTo('products', {filter: 'trending'})">
+                            View All
+                            <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                        </button>
+                    </div>
+                    <div class="products-grid" id="trending-products-grid">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Best Sellers -->
+            <section class="section">
+                <div class="container">
+                    <div class="section-header">
+                        <div class="section-title-group">
+                            <div class="section-icon bestseller-icon">
+                                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"></path></svg>
+                            </div>
+                            <div>
+                                <h2 class="section-heading">Best Sellers</h2>
+                                <p class="section-subtitle">Customer favorites</p>
+                            </div>
+                        </div>
+                        <button class="btn btn-ghost" onclick="navigateTo('products', {filter: 'best-sellers'})">
+                            View All
+                            <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                        </button>
+                    </div>
+                    <div class="products-grid" id="bestseller-products-grid">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Features -->
+            <section class="section features-section">
+                <div class="container">
+                    <div class="features-grid">
+                        <div class="feature-card">
+                            <div class="feature-icon delivery-icon">
+                                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h1m8-1a1 1 0 01-1 1H9m4-1V8a1 1 0 011-1h2.586a1 1 0 01.707.293l3.414 3.414a1 1 0 01.293.707V16a1 1 0 01-1 1h-1m-6-1a1 1 0 001 1h1M5 17a2 2 0 104 0m-4 0a2 2 0 114 0m6 0a2 2 0 104 0m-4 0a2 2 0 114 0"></path></svg>
+                            </div>
+                            <h3 class="feature-title">Free Delivery</h3>
+                            <p class="feature-text">On orders above ৳1000</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon cod-icon">
+                                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                            </div>
+                            <h3 class="feature-title">Cash on Delivery</h3>
+                            <p class="feature-text">Pay when you receive</p>
+                        </div>
+                        <div class="feature-card">
+                            <div class="feature-icon returns-icon">
+                                <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                            </div>
+                            <h3 class="feature-title">7-Day Returns</h3>
+                            <p class="feature-text">Easy return policy</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- PRODUCTS PAGE -->
+        <div class="page" id="products-page">
+            <div class="container products-container">
+                <div class="products-header">
+                    <h1 class="page-title">All Products</h1>
+                    <div class="search-bar-products">
+                        <svg class="search-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        <input type="search" placeholder="Search products in real-time..." id="products-search">
+                        <button class="clear-search hidden" id="clear-products-search">
+                            <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
+                    <div class="products-meta">
+                        <p class="products-count">Showing <span id="filtered-count">0</span> products</p>
+                        <div class="active-filters" id="active-filters"></div>
+                    </div>
+                </div>
+
+                <div class="products-layout">
+                    <!-- Filters Sidebar -->
+                    <aside class="filters-sidebar desktop-only" id="filters-sidebar">
+                        <div class="filters-header">
+                            <div class="filters-title">
+                                <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                                <h3>Filters</h3>
+                            </div>
+                            <button class="clear-all-btn" id="clear-all-filters">Clear all</button>
+                        </div>
+
+                        <!-- Categories -->
+                        <div class="filter-group">
+                            <h4 class="filter-group-title">Categories</h4>
+                            <div class="filter-options" id="category-filters">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Price Range -->
+                        <div class="filter-group">
+                            <h4 class="filter-group-title">Price Range</h4>
+                            <div class="price-slider">
+                                <input type="range" min="0" max="50000" value="50000" class="range-input" id="price-max">
+                                <div class="price-values">
+                                    <span>৳0</span>
+                                    <span id="price-max-value">৳50,000</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Rating -->
+                        <div class="filter-group">
+                            <h4 class="filter-group-title">Minimum Rating</h4>
+                            <div class="rating-filters" id="rating-filters">
+                                <button class="rating-filter-btn" data-rating="4">4+ ⭐</button>
+                                <button class="rating-filter-btn" data-rating="3">3+ ⭐</button>
+                                <button class="rating-filter-btn" data-rating="2">2+ ⭐</button>
+                                <button class="rating-filter-btn" data-rating="1">1+ ⭐</button>
+                            </div>
+                        </div>
+
+                        <!-- Flash Sale Only -->
+                        <div class="filter-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="flash-sale-only">
+                                <span>Flash Sale Only</span>
+                            </label>
+                        </div>
+
+                        <button class="btn btn-outline btn-block" id="clear-filters-btn">Clear All Filters</button>
+                    </aside>
+
+                    <!-- Products Grid -->
+                    <div class="products-main">
+                        <!-- Toolbar -->
+                        <div class="products-toolbar">
+                            <div class="toolbar-left">
+                                <button class="btn btn-outline mobile-only" id="mobile-filters-btn">
+                                    <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                                    Filters
+                                    <span class="badge filter-badge hidden" id="filter-count-badge">0</span>
+                                </button>
+                                <select class="sort-select" id="sort-select">
+                                    <option value="popularity">Popularity</option>
+                                    <option value="price-low">Price: Low to High</option>
+                                    <option value="price-high">Price: High to Low</option>
+                                    <option value="rating">Rating</option>
+                                    <option value="discount">Discount</option>
+                                </select>
+                            </div>
+                            <div class="toolbar-right">
+                                <button class="view-btn active" data-view="grid">
+                                    <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+                                </button>
+                                <button class="view-btn" data-view="list">
+                                    <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Products Grid -->
+                        <div class="products-grid" id="products-grid-main">
+                            <!-- Populated by JS -->
+                        </div>
+
+                        <!-- No Results -->
+                        <div class="no-results hidden" id="no-results">
+                            <div class="no-results-icon">
+                                <svg class="icon-lg" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            </div>
+                            <p class="no-results-title">No products found</p>
+                            <p class="no-results-text">Try adjusting your filters or search query</p>
+                            <button class="btn btn-outline" onclick="clearAllFilters()">Clear All Filters</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PRODUCT DETAILS PAGE -->
+        <div class="page" id="product-details-page">
+            <!-- Content populated by JS -->
+        </div>
+
+        <!-- CART PAGE -->
+        <div class="page" id="cart-page">
+            <!-- Content populated by JS -->
+        </div>
+
+        <!-- CHECKOUT PAGE -->
+        <div class="page" id="checkout-page">
+            <!-- Content populated by JS -->
+        </div>
+
+        <!-- PROFILE PAGE -->
+        <div class="page" id="profile-page">
+            <!-- Content populated by JS -->
+        </div>
+
+        <!-- ADMIN PAGES -->
+        <div class="page admin-page" id="admin-dashboard-page">
+            <!-- Content populated by JS -->
+        </div>
+
+        <div class="page admin-page" id="admin-products-page">
+            <!-- Content populated by JS -->
+        </div>
+
+        <div class="page admin-page" id="admin-orders-page">
+            <!-- Content populated by JS -->
+        </div>
+
+        <div class="page admin-page" id="admin-messages-page">
+            <!-- Content populated by JS -->
+        </div>
+
+        <div class="page admin-page" id="admin-analytics-page">
+            <!-- Content populated by JS -->
+        </div>
+
+        <div class="page admin-page" id="admin-flash-sales-page">
+            <!-- Content populated by JS -->
+        </div>
+
+        <div class="page admin-page" id="admin-settings-page">
+            <!-- Content populated by JS -->
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer" id="main-footer">
+        <!-- Newsletter -->
+        <div class="newsletter">
+            <div class="container">
+                <div class="newsletter-content">
+                    <div class="newsletter-icon">
+                        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                    </div>
+                    <h2>Subscribe to HaatHub</h2>
+                    <p>Get instant email notifications about flash sales, exclusive deals, and new arrivals!</p>
+                    <form class="newsletter-form" id="newsletter-form">
+                        <input type="email" placeholder="Enter your email address" required>
+                        <button type="submit" class="btn btn-white">
+                            <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                            Subscribe
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer Links -->
+        <div class="footer-content">
+            <div class="container">
+                <div class="footer-grid">
+                    <div class="footer-col">
+                        <h4>HaatHub</h4>
+                        <p>Premium shopping with fast delivery and cash on delivery options.</p>
+                    </div>
+                    <div class="footer-col">
+                        <h4>Shop</h4>
+                        <ul>
+                            <li><a href="#" onclick="navigateTo('products')">All Products</a></li>
+                            <li><a href="#" onclick="navigateTo('products', {flashSale: true})">Flash Sales</a></li>
+                            <li><a href="#" onclick="navigateTo('products', {filter: 'trending'})">New Arrivals</a></li>
+                            <li><a href="#" onclick="navigateTo('products', {filter: 'best-sellers'})">Best Sellers</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer-col">
+                        <h4>Customer Service</h4>
+                        <ul>
+                            <li><a href="#">Contact Us</a></li>
+                            <li><a href="#">Returns</a></li>
+                            <li><a href="#">FAQ</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer-col">
+                        <h4>About</h4>
+                        <ul>
+                            <li><a href="#">About Us</a></li>
+                            <li><a href="#">Privacy Policy</a></li>
+                            <li><a href="#">Terms of Service</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="footer-bottom">
+                    <p>© 2024 HaatHub. All rights reserved. University Web Programming Project.</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Message Widget -->
+    <button class="message-widget" id="message-widget">
+        <svg class="icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+    </button>
+
+    <!-- Message Chat Window -->
+    <div class="message-chat hidden" id="message-chat">
+        <div class="chat-header">
+            <div class="chat-header-info">
+                <div class="chat-avatar">
+                    <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
+                </div>
+                <div>
+                    <h4>HaatHub Support</h4>
+                    <p>We typically reply in minutes</p>
+                </div>
+            </div>
+            <button class="chat-close" id="close-chat">
+                <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+            <div class="chat-message admin-message">
+                <div class="message-bubble">
+                    <p>Hello! How can we help you today?</p>
+                    <span class="message-time">Just now</span>
+                </div>
+            </div>
+        </div>
+        <div class="chat-input">
+            <input type="text" placeholder="Type your message..." id="chat-input-field">
+            <button class="btn btn-primary btn-icon" id="send-message">
+                <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Login Modal -->
+    <div class="modal hidden" id="login-modal">
+        <div class="modal-overlay" onclick="closeLoginModal()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Login to HaatHub</h3>
+                <button class="modal-close" onclick="closeLoginModal()">
+                    <svg class="icon-sm" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <form class="modal-body" id="login-form">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" placeholder="your-email@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" placeholder="Enter your password" required>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Login</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
