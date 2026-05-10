@@ -2,7 +2,7 @@
 // DATA
 // ========================================
 
-const PRODUCTS_DATA = [
+let PRODUCTS_DATA = [
   {
     id: "1",
     name: "Premium Wireless Headphones",
@@ -190,7 +190,7 @@ const PRODUCTS_DATA = [
   }
 ];
 
-const ORDERS_DATA = [
+let ORDERS_DATA = [
   {
     id: "ORD-2024-001",
     customer: { name: "Ahmed Khan", email: "ahmed@example.com", phone: "+880 1712-345678" },
@@ -228,7 +228,7 @@ const ORDERS_DATA = [
   }
 ];
 
-const MESSAGES_DATA = [
+let MESSAGES_DATA = [
   {
     id: 1,
     customer: { name: "Ahmed Khan", email: "ahmed@example.com" },
@@ -288,6 +288,126 @@ const APP_STATE = {
   currentProduct: null,
   currentLoginRole: null
 };
+
+
+// ========================================
+// BACKEND API
+// ========================================
+
+const API_BASE = (window.HAATHUB_CONFIG && window.HAATHUB_CONFIG.apiBase) || 'api';
+
+async function apiFetch(endpoint, payload = null, options = {}) {
+  const method = options.method || (payload ? 'POST' : 'GET');
+  const url = `${API_BASE}/${endpoint}`;
+  const fetchOptions = {
+    method,
+    credentials: 'same-origin',
+    headers: payload ? { 'Content-Type': 'application/json' } : {},
+  };
+  if (payload) fetchOptions.body = JSON.stringify(payload);
+
+  const response = await fetch(url, fetchOptions);
+  let result;
+  try {
+    result = await response.json();
+  } catch (error) {
+    throw new Error('Invalid server response. Check PHP errors and database setup.');
+  }
+  if (!response.ok || result.success === false) {
+    throw new Error(result.message || 'Request failed.');
+  }
+  return result.data || {};
+}
+
+function normalizeProductIds() {
+  PRODUCTS_DATA = PRODUCTS_DATA.map(product => ({
+    ...product,
+    id: String(product.id),
+    price: Number(product.price || 0),
+    oldPrice: Number(product.oldPrice || 0),
+    discount: Number(product.discount || 0),
+    stock: Number(product.stock || 0),
+    rating: Number(product.rating || 0),
+    reviews: Number(product.reviews || 0)
+  }));
+}
+
+async function loadServerState() {
+  try {
+    const productsResponse = await apiFetch('products.php?action=list');
+    if (Array.isArray(productsResponse.products) && productsResponse.products.length) {
+      PRODUCTS_DATA = productsResponse.products;
+      normalizeProductIds();
+    }
+  } catch (error) {
+    console.warn('Products API fallback:', error.message);
+    normalizeProductIds();
+  }
+
+  try {
+    const authResponse = await apiFetch('auth.php?action=me');
+    if (authResponse.user) {
+      APP_STATE.isLoggedIn = true;
+      APP_STATE.userRole = authResponse.user.role;
+      APP_STATE.currentUser = authResponse.user;
+    }
+  } catch (error) {
+    console.warn('Auth API unavailable:', error.message);
+  }
+
+  try {
+    const cartResponse = await apiFetch('cart.php?action=list');
+    if (Array.isArray(cartResponse.cart)) APP_STATE.cart = cartResponse.cart;
+  } catch (error) {
+    console.warn('Cart API fallback:', error.message);
+  }
+
+  if (APP_STATE.isLoggedIn) {
+    if (APP_STATE.userRole === 'admin') APP_STATE.orders = [];
+    try {
+      const wishlistResponse = await apiFetch('wishlist.php?action=list');
+      if (Array.isArray(wishlistResponse.wishlist)) APP_STATE.wishlist = wishlistResponse.wishlist.map(String);
+    } catch (error) {
+      console.warn('Wishlist API fallback:', error.message);
+    }
+    try {
+      await refreshOrdersFromServer(APP_STATE.userRole === 'admin');
+    } catch (error) {
+      console.warn('Orders API fallback:', error.message);
+    }
+    if (APP_STATE.userRole === 'admin') {
+      try { await refreshAdminMessagesFromServer(); } catch (error) { console.warn('Messages API fallback:', error.message); }
+    }
+  }
+}
+
+async function refreshOrdersFromServer(admin = false) {
+  const endpoint = admin ? 'orders.php?action=list&admin=1' : 'orders.php?action=list';
+  const response = await apiFetch(endpoint);
+  if (Array.isArray(response.orders)) {
+    if (admin) ORDERS_DATA = response.orders;
+    else APP_STATE.orders = response.orders;
+  }
+}
+
+async function refreshAdminMessagesFromServer() {
+  const response = await apiFetch('messages.php?action=list&admin=1');
+  if (Array.isArray(response.conversations)) {
+    ADMIN_INBOX_CACHE = response.conversations.map(thread => ({
+      id: thread.id,
+      customer: thread.customer,
+      orderId: thread.orderId || '',
+      time: thread.date ? new Date(thread.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+      unread: Number(thread.unreadByAdmin || 0) > 0,
+      messages: (thread.messages && thread.messages.length ? thread.messages : [{ sender: 'customer', text: thread.lastMessage || 'No message preview available.', timestamp: thread.date }]).map(message => ({
+        sender: message.sender === 'customer' ? 'customer' : 'admin',
+        text: message.text,
+        time: message.timestamp ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''
+      })),
+      preview: thread.lastMessage || ''
+    }));
+  }
+}
 
 // ========================================
 // HELPERS
@@ -854,24 +974,29 @@ function decreaseQuantity() {
 // CART, WISHLIST, CHECKOUT
 // ========================================
 
-function addToCart(productId, quantity = 1) {
-  const product = PRODUCTS_DATA.find(item => item.id === String(productId));
-  if (!product || product.stock <= 0) {
-    showToast('Product is not available.', 'error');
+async function addToCart(productId, quantity = 1) {
+  const product = PRODUCTS_DATA.find(p => p.id === String(productId));
+  if (!product || product.stock === 0) {
+    showToast('Product not available.', 'error');
     return;
   }
 
-  const existing = APP_STATE.cart.find(item => item.productId === product.id);
-  const requestedQuantity = Number(quantity) || 1;
-
-  if (existing) {
-    if (existing.quantity + requestedQuantity > product.stock) {
-      showToast('Not enough stock available.', 'error');
-      return;
+  try {
+    const response = await apiFetch('cart.php?action=add', { productId: String(productId), quantity });
+    if (Array.isArray(response.cart)) APP_STATE.cart = response.cart.map(item => ({ productId: String(item.productId), quantity: Number(item.quantity || 1) }));
+  } catch (error) {
+    console.warn('Cart API fallback:', error.message);
+    const existing = APP_STATE.cart.find(item => item.productId === String(productId));
+    if (existing) {
+      const nextQuantity = existing.quantity + quantity;
+      if (nextQuantity > product.stock) {
+        showToast('Not enough stock available.', 'error');
+        return;
+      }
+      existing.quantity = nextQuantity;
+    } else {
+      APP_STATE.cart.push({ productId: String(productId), quantity });
     }
-    existing.quantity += requestedQuantity;
-  } else {
-    APP_STATE.cart.push({ productId: product.id, quantity: Math.min(requestedQuantity, product.stock) });
   }
 
   saveState();
@@ -884,50 +1009,63 @@ function addToCartFromDetails(productId) {
   addToCart(productId, quantity);
 }
 
-function removeFromCart(productId) {
-  APP_STATE.cart = APP_STATE.cart.filter(item => item.productId !== String(productId));
+async function removeFromCart(productId) {
+  try {
+    const response = await apiFetch('cart.php?action=remove', { productId: String(productId) });
+    if (Array.isArray(response.cart)) APP_STATE.cart = response.cart.map(item => ({ productId: String(item.productId), quantity: Number(item.quantity || 1) }));
+  } catch (error) {
+    APP_STATE.cart = APP_STATE.cart.filter(item => item.productId !== String(productId));
+  }
   saveState();
   updateCartBadge();
   renderCart();
   showToast('Item removed from cart.');
 }
 
-function updateCartQuantity(productId, newQuantity) {
-  const product = PRODUCTS_DATA.find(item => item.id === String(productId));
-  const cartItem = APP_STATE.cart.find(item => item.productId === String(productId));
-  if (!product || !cartItem) return;
-
+async function updateCartQuantity(productId, newQuantity) {
   if (newQuantity < 1) {
-    removeFromCart(productId);
+    await removeFromCart(productId);
     return;
   }
 
-  if (newQuantity > product.stock) {
+  const product = PRODUCTS_DATA.find(p => p.id === String(productId));
+  if (!product || newQuantity > product.stock) {
     showToast('Not enough stock available.', 'error');
     return;
   }
 
-  cartItem.quantity = newQuantity;
+  try {
+    const response = await apiFetch('cart.php?action=update', { productId: String(productId), quantity: newQuantity });
+    if (Array.isArray(response.cart)) APP_STATE.cart = response.cart.map(item => ({ productId: String(item.productId), quantity: Number(item.quantity || 1) }));
+  } catch (error) {
+    const item = APP_STATE.cart.find(entry => entry.productId === String(productId));
+    if (item) item.quantity = newQuantity;
+  }
   saveState();
   updateCartBadge();
   renderCart();
 }
 
-function toggleWishlist(productId) {
+async function toggleWishlist(productId) {
   if (!APP_STATE.isLoggedIn) {
-    showToast('Please login to use wishlist.', 'info');
     showLoginModal('user');
     return;
   }
 
-  const id = String(productId);
-  const index = APP_STATE.wishlist.indexOf(id);
-  if (index >= 0) {
-    APP_STATE.wishlist.splice(index, 1);
-    showToast('Removed from wishlist.');
-  } else {
-    APP_STATE.wishlist.push(id);
-    showToast('Added to wishlist.');
+  try {
+    const response = await apiFetch('wishlist.php?action=toggle', { productId: String(productId) });
+    if (Array.isArray(response.wishlist)) APP_STATE.wishlist = response.wishlist.map(String);
+    showToast(response.active ? 'Added to wishlist.' : 'Removed from wishlist.');
+  } catch (error) {
+    const id = String(productId);
+    const index = APP_STATE.wishlist.indexOf(id);
+    if (index > -1) {
+      APP_STATE.wishlist.splice(index, 1);
+      showToast('Removed from wishlist.');
+    } else {
+      APP_STATE.wishlist.push(id);
+      showToast('Added to wishlist.');
+    }
   }
 
   saveState();
@@ -1057,39 +1195,49 @@ function renderCheckout() {
   $('#checkout-form')?.addEventListener('submit', handleCheckoutSubmit);
 }
 
-function handleCheckoutSubmit(event) {
+async function handleCheckoutSubmit(event) {
   event.preventDefault();
 
   if (!APP_STATE.isLoggedIn) {
-    showToast('Please login before checkout.', 'info');
     showLoginModal('user');
     return;
   }
 
-  const formData = new FormData(event.currentTarget);
-  const subtotal = calculateCartTotal();
-  const deliveryFee = subtotal >= 1000 ? 0 : 60;
-  const order = {
-    id: `ORD-${Date.now().toString().slice(-8)}`,
-    customer: {
-      name: formData.get('fullName'),
-      phone: formData.get('phone'),
-      email: APP_STATE.currentUser?.email || '',
-      address: formData.get('address')
-    },
-    items: APP_STATE.cart.map(item => ({ ...item })),
-    total: subtotal + deliveryFee,
-    status: 'pending',
-    paymentMethod: formData.get('paymentMethod') || 'COD',
-    date: new Date().toISOString()
+  const formData = new FormData(event.target);
+  const payload = {
+    fullName: formData.get('fullName'),
+    phone: formData.get('phone'),
+    address: formData.get('address'),
+    city: formData.get('city'),
+    note: formData.get('note'),
+    paymentMethod: 'COD',
+    items: APP_STATE.cart
   };
+
+  let order;
+  try {
+    const response = await apiFetch('orders.php?action=create', payload);
+    order = response.order;
+  } catch (error) {
+    console.warn('Order API fallback:', error.message);
+    order = {
+      id: 'ORD-' + Date.now().toString().slice(-8),
+      customer: { name: payload.fullName, phone: payload.phone, email: APP_STATE.currentUser?.email || '', address: payload.address },
+      items: [...APP_STATE.cart],
+      total: calculateCartTotal() + (calculateCartTotal() >= 1000 ? 0 : 60),
+      status: 'pending',
+      paymentMethod: 'COD',
+      date: new Date().toISOString()
+    };
+  }
 
   APP_STATE.orders.push(order);
   APP_STATE.cart = [];
+  try { await apiFetch('cart.php?action=clear', {}); } catch (error) {}
   saveState();
   updateCartBadge();
   showToast('Order placed successfully.');
-  navigateTo('profile');
+  setTimeout(() => navigateTo('profile'), 900);
 }
 
 function renderProfile() {
@@ -1218,7 +1366,7 @@ function renderLoginModal(role = null) {
   $('#login-form')?.addEventListener('submit', handleLogin);
 }
 
-function handleLogin(event) {
+async function handleLogin(event) {
   event.preventDefault();
   const form = event.currentTarget;
   const role = form.dataset.role || 'user';
@@ -1230,28 +1378,46 @@ function handleLogin(event) {
     return;
   }
 
-  if (role === 'admin' && !(email.toLowerCase() === 'admin@haathub.com' && password === 'admin123')) {
-    showToast('Invalid admin credentials.', 'error');
+  try {
+    let response;
+    try {
+      response = await apiFetch('auth.php?action=login', { email, password, role });
+    } catch (loginError) {
+      if (role === 'user') {
+        response = await apiFetch('auth.php?action=register', { email, password, name: email.split('@')[0] });
+      } else {
+        throw loginError;
+      }
+    }
+    APP_STATE.isLoggedIn = true;
+    APP_STATE.userRole = response.user.role;
+    APP_STATE.currentUser = response.user;
+    if (APP_STATE.userRole === 'admin') {
+      APP_STATE.orders = [];
+      await refreshOrdersFromServer(true).catch(() => null);
+      await refreshAdminMessagesFromServer().catch(() => null);
+    } else {
+      await refreshOrdersFromServer(false).catch(() => null);
+      const wishlistResponse = await apiFetch('wishlist.php?action=list').catch(() => null);
+      if (wishlistResponse?.wishlist) APP_STATE.wishlist = wishlistResponse.wishlist.map(String);
+    }
+  } catch (error) {
+    showToast(error.message || 'Login failed.', 'error');
     return;
   }
 
-  APP_STATE.isLoggedIn = true;
-  APP_STATE.userRole = role;
-  APP_STATE.currentUser = {
-    email,
-    name: role === 'admin' ? 'HaatHub Admin' : email.split('@')[0]
-  };
-
   saveState();
   updateUserMenu();
+  updateWishlistBadge();
   closeLoginModal();
-  showToast(role === 'admin' ? 'Admin login successful.' : 'Welcome back.');
+  showToast(APP_STATE.userRole === 'admin' ? 'Admin login successful.' : 'Welcome back.');
 
-  if (role === 'admin') navigateTo('admin-dashboard');
+  if (APP_STATE.userRole === 'admin') navigateTo('admin-dashboard');
   else if (APP_STATE.currentPage === 'checkout') renderCheckout();
 }
 
-function handleLogout() {
+async function handleLogout() {
+  try { await apiFetch('auth.php?action=logout', {}); } catch (error) {}
   APP_STATE.isLoggedIn = false;
   APP_STATE.userRole = null;
   APP_STATE.currentUser = null;
@@ -1921,13 +2087,21 @@ function appendChatMessage(text, type = 'user') {
   messages.scrollTop = messages.scrollHeight;
 }
 
-function sendMessage() {
+async function sendMessage() {
   const input = $('#chat-input-field');
   const text = input?.value.trim();
   if (!input || !text) return;
 
   appendChatMessage(text, 'user');
   input.value = '';
+
+  if (APP_STATE.isLoggedIn && APP_STATE.userRole !== 'admin') {
+    try {
+      await apiFetch('messages.php?action=send', { subject: 'Customer Support', message: text });
+    } catch (error) {
+      console.warn('Message API fallback:', error.message);
+    }
+  }
 
   setTimeout(() => {
     appendChatMessage('Thank you for your message. Our support team will get back to you shortly.', 'admin');
@@ -2038,10 +2212,11 @@ window.sendMessage = sendMessage;
 
 let appInitialized = false;
 
-function initApp() {
+async function initApp() {
   if (appInitialized) return;
   appInitialized = true;
   loadState();
+  await loadServerState();
   bindStaticEvents();
   updateCartBadge();
   updateWishlistBadge();

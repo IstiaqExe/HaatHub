@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HaatHub - Your Digital হাট</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="css/styles.css">
     <link rel="icon" type="image/png" href="assets/haathub-logo.png">
 </head>
 <body>
@@ -574,6 +574,7 @@
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <script>window.HAATHUB_CONFIG = { apiBase: "api" };</script>
+    <script src="js/app.js"></script>
 </body>
 </html>
