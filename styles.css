@@ -3704,3 +3704,331 @@ main.admin-mode {
         max-width: 90%;
     }
 }
+
+/* ==================== STORE FRONT COLOR MATCH OVERRIDES ==================== */
+/* Matches the original navy/cyan storefront shown in the reference screenshots. */
+#main-header.header {
+    background: #ffffff;
+    border-bottom: 1px solid #e3e8ef;
+    box-shadow: none;
+}
+
+#main-header .header-topbar {
+    background: #111c30;
+    color: #ffffff;
+}
+
+#main-header .topbar-content {
+    padding: 0.78rem 0;
+}
+
+#main-header .topbar-text,
+#main-header .topbar-link {
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+#main-header .topbar-link:hover {
+    color: #22d3ee;
+}
+
+#main-header .header-main {
+    background: #ffffff;
+    padding: 1.25rem 0;
+}
+
+#main-header .header-content {
+    gap: 2rem;
+}
+
+#main-header .logo h1 {
+    width: 4.25rem;
+    height: 3.6rem;
+    background: linear-gradient(180deg, #fff7ed, #ffffff);
+    border: 2px solid #ffffff;
+    border-radius: 0.22rem;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+    color: transparent;
+    font-size: 0;
+    line-height: 1;
+    display: grid;
+    place-items: center;
+    position: relative;
+    overflow: hidden;
+}
+
+#main-header .logo h1::before {
+    content: '🏪';
+    display: block;
+    font-size: 1.65rem;
+    transform: translateY(-0.18rem);
+}
+
+#main-header .logo h1::after {
+    content: 'HaatHub';
+    position: absolute;
+    bottom: 0.15rem;
+    left: 0;
+    right: 0;
+    color: #16851e;
+    font-size: 0.78rem;
+    font-weight: 900;
+    text-align: center;
+    text-shadow: 0 1px 0 #ffffff;
+}
+
+#main-header .search-bar {
+    max-width: 52.5rem;
+}
+
+#main-header .search-bar input {
+    height: 2.95rem;
+    border: 2px solid #cbd3df;
+    border-radius: 0.9rem;
+    color: #1f2937;
+    font-size: 1rem;
+    background: #ffffff;
+}
+
+#main-header .search-bar input::placeholder {
+    color: #73829a;
+}
+
+#main-header .header-icon-btn {
+    color: #07142f;
+}
+
+#main-header .header-icon-btn:hover {
+    background: #eef4f8;
+    color: #0891b2;
+}
+
+#main-header .categories-bar {
+    background: #f8fafc;
+    border-top: 1px solid #e3e8ef;
+    border-bottom: 1px solid #e3e8ef;
+    backdrop-filter: none;
+}
+
+#main-header .categories-scroll {
+    gap: 2rem;
+    padding: 0.9rem 0;
+}
+
+#main-header .category-link {
+    color: #374151;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+#main-header .category-link:hover,
+#main-header .category-link.active {
+    color: #0891b2;
+}
+
+.hero {
+    background: linear-gradient(135deg, #111c30 0%, #1d2d45 100%);
+    min-height: 41rem;
+    padding: 5rem 0;
+    display: flex;
+    align-items: center;
+}
+
+.hero-pattern {
+    background-image: radial-gradient(circle at 15% 20%, rgba(6, 182, 212, 0.12), transparent 28%), radial-gradient(circle at 80% 0%, rgba(20, 184, 166, 0.09), transparent 24%);
+    opacity: 1;
+}
+
+.hero-container {
+    grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+    gap: 5rem;
+}
+
+.hero-badge {
+    background: rgba(8, 145, 178, 0.22);
+    border: 1px solid rgba(34, 211, 238, 0.42);
+    color: #22d3ee;
+    padding: 0.58rem 1.2rem;
+    font-size: 1rem;
+    font-weight: 500;
+}
+
+.hero-title {
+    margin-bottom: 1.55rem;
+}
+
+@media (min-width: 768px) {
+    .hero-title {
+        font-size: 4.55rem;
+        line-height: 1.05;
+        letter-spacing: -0.04em;
+    }
+}
+
+.gradient-text {
+    background: linear-gradient(135deg, #09dbe3, #06d6d7 45%, #14e3c5);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.hero-subtitle {
+    max-width: 39rem;
+    color: #f5f8fb;
+    font-size: 1.55rem;
+    line-height: 1.45;
+    opacity: 1;
+    margin-bottom: 2.45rem;
+}
+
+.hero .btn-primary {
+    min-height: 3.15rem;
+    padding-inline: 1.45rem;
+    background: linear-gradient(135deg, #06b6d4, #0d9488);
+    border-radius: 0.85rem;
+    font-weight: 800;
+}
+
+.hero .btn-outline {
+    min-height: 3.15rem;
+    padding-inline: 1.8rem;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(203, 213, 225, 0.45);
+    color: #ffffff;
+    border-radius: 0.85rem;
+    font-weight: 800;
+}
+
+.hero .btn-outline:hover {
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.65);
+}
+
+.hero-preview {
+    gap: 1.25rem;
+}
+
+.hero-product-card {
+    background: rgba(51, 65, 85, 0.92);
+    border: 1px solid rgba(148, 163, 184, 0.32);
+    border-radius: 1.18rem;
+    padding: 1.25rem;
+    box-shadow: 0 18px 35px rgba(2, 6, 23, 0.16);
+}
+
+.hero-product-card:hover {
+    background: rgba(61, 76, 97, 0.98);
+    border-color: rgba(34, 211, 238, 0.38);
+}
+
+.hero-product-card img {
+    height: 10rem;
+    border-radius: 0.85rem;
+}
+
+.hero-product-card h3 {
+    color: #ffffff;
+    font-size: 1.08rem;
+    font-weight: 800;
+    margin-bottom: 0.42rem;
+}
+
+.hero-product-card p {
+    color: #22d3ee;
+    font-size: 1.2rem;
+    font-weight: 900;
+}
+
+.flash-sales-section {
+    background: #ffffff;
+    padding-top: 2rem;
+}
+
+.flash-sales-card {
+    background: #fffbeb;
+    border: 2px solid #ffb11f;
+    border-radius: 1rem;
+    box-shadow: none;
+}
+
+.flash-sales-header {
+    background: linear-gradient(135deg, #ff9f00, #ff6a00);
+    padding: 1.9rem 2rem;
+}
+
+.flash-icon {
+    width: 3.75rem;
+    height: 3.75rem;
+    background: rgba(255, 255, 255, 0.22);
+}
+
+.flash-sales-header .section-heading {
+    color: #ffffff;
+    font-size: 1.9rem;
+}
+
+.flash-subtitle {
+    color: #fff7ed;
+    font-size: 1.08rem;
+}
+
+.countdown-large {
+    gap: 0.6rem;
+}
+
+.countdown-large::before {
+    color: #111827;
+    font-weight: 800;
+}
+
+.countdown-time-box,
+.countdown-item {
+    background: #fffdf5;
+    border: 1px solid rgba(251, 191, 36, 0.35);
+    border-radius: 0.85rem;
+}
+
+.countdown-value {
+    color: #7c2d12;
+}
+
+.message-widget {
+    background: #059fb0;
+}
+
+@media (max-width: 900px) {
+    .hero-container {
+        grid-template-columns: 1fr;
+        gap: 2.5rem;
+    }
+    .hero {
+        min-height: auto;
+        padding: 4rem 0;
+    }
+}
+
+@media (max-width: 767px) {
+    #main-header .header-main {
+        padding: 0.85rem 0;
+    }
+    #main-header .logo h1 {
+        width: 3.55rem;
+        height: 3rem;
+    }
+    #main-header .logo h1::before {
+        font-size: 1.25rem;
+    }
+    #main-header .logo h1::after {
+        font-size: 0.62rem;
+    }
+    .hero-title,
+    .hero-title .gradient-text {
+        font-size: 3rem;
+    }
+    .hero-subtitle {
+        font-size: 1.15rem;
+    }
+    .flash-sales-header {
+        padding: 1.4rem;
+    }
+}
