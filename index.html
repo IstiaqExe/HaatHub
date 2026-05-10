@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HaatHub - Your Digital হাট</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="icon" type="image/png" href="assets/haathub-logo.png">
 </head>
 <body>
     <!-- Header -->
@@ -30,8 +31,8 @@
             <div class="container">
                 <div class="header-content">
                     <!-- Logo -->
-                    <div class="logo" onclick="navigateTo('home')">
-                        <h1>HaatHub</h1>
+                    <div class="logo" onclick="navigateTo('home')" aria-label="HaatHub Home">
+                        <img src="assets/haathub-logo.png" alt="HaatHub logo" class="site-logo">
                     </div>
 
                     <!-- Desktop Search -->
@@ -99,8 +100,9 @@
     <!-- Admin Sidebar -->
     <aside class="admin-sidebar hidden" id="admin-sidebar">
         <div class="admin-sidebar-header">
-            <div class="admin-logo-mark" aria-label="HaatHub logo"></div>
-            <h2>HaatHub</h2>
+            <div class="admin-logo-wrap" aria-label="HaatHub logo">
+                <img src="assets/haathub-logo.png" alt="HaatHub logo" class="admin-logo-img">
+            </div>
             <p>Admin Panel</p>
         </div>
         <nav class="admin-nav">
