@@ -1268,23 +1268,181 @@ function handleLogout() {
 // ADMIN PANEL
 // ========================================
 
+let ADMIN_INBOX_CACHE = null;
+let ADMIN_SELECTED_FLASH_PRODUCTS = new Set();
+
 function allOrders() {
   return [...ORDERS_DATA, ...APP_STATE.orders];
 }
 
-function adminShell(title, subtitle, content) {
+function getOrderStatusCounts() {
+  const orders = allOrders();
+  return ['pending', 'confirmed', 'packed', 'shipped', 'delivered'].reduce((acc, status) => {
+    acc[status] = orders.filter(order => order.status === status).length;
+    return acc;
+  }, {});
+}
+
+function getAdminInbox() {
+  if (ADMIN_INBOX_CACHE) return ADMIN_INBOX_CACHE;
+
+  const seedThreads = [
+    {
+      id: 101,
+      customer: { name: 'Ahmed Khan', email: 'ahmed@example.com' },
+      orderId: 'ORD-2024-001',
+      time: '10:30 AM',
+      unread: true,
+      messages: [
+        { sender: 'customer', text: 'Hello, I have a question about my recent order.', time: '10:15 AM' },
+        { sender: 'admin', text: "Hi Ahmed! I'd be happy to help. What would you like to know?", time: '10:20 AM' },
+        { sender: 'customer', text: 'Can I change the delivery address for order ORD-2024-001?', time: '10:30 AM' }
+      ]
+    },
+    {
+      id: 102,
+      customer: { name: 'Fatima Rahman', email: 'fatima@example.com' },
+      orderId: 'ORD-2024-002',
+      time: '03:45 PM',
+      unread: false,
+      messages: [
+        { sender: 'customer', text: 'Is the smartwatch water resistant?', time: '03:15 PM' },
+        { sender: 'admin', text: 'Yes, it has water resistance for everyday use.', time: '03:30 PM' },
+        { sender: 'customer', text: 'Great, thank you!', time: '03:45 PM' }
+      ]
+    },
+    {
+      id: 103,
+      customer: { name: 'Karim Hossain', email: 'karim@example.com' },
+      orderId: 'ORD-2024-003',
+      time: '09:00 AM',
+      unread: true,
+      messages: [
+        { sender: 'customer', text: 'Do you have the leather bag in brown color?', time: '08:55 AM' },
+        { sender: 'admin', text: 'We currently have black and tan available. Brown will restock soon.', time: '09:00 AM' }
+      ]
+    },
+    {
+      id: 104,
+      customer: { name: 'Nazia Sultana', email: 'nazia@example.com' },
+      orderId: 'ORD-2024-004',
+      time: '04:20 PM',
+      unread: false,
+      messages: [
+        { sender: 'customer', text: 'Can I get delivery tomorrow?', time: '04:20 PM' }
+      ]
+    }
+  ];
+
+  ADMIN_INBOX_CACHE = seedThreads;
+  return ADMIN_INBOX_CACHE;
+}
+
+function adminIcon(name) {
+  const icons = {
+    sales: '<svg class="admin-mini-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-2 0-3 .8-3 2s1 2 3 2 3 .8 3 2-1 2-3 2m0-10v12"/></svg>',
+    orders: '<svg class="admin-mini-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/></svg>',
+    package: '<svg class="admin-mini-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10"/></svg>',
+    clock: '<svg class="admin-mini-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+    trend: '<svg class="admin-title-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>',
+    alert: '<svg class="admin-title-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>',
+    flash: '<svg class="admin-title-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>',
+    message: '<svg class="admin-title-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>',
+    settings: '<svg class="admin-title-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>'
+  };
+  return icons[name] || '';
+}
+
+function adminShell(title, subtitle, content, actions = '') {
   return `
-    <div class="admin-panel">
-      <div class="admin-panel-header">
+    <div class="admin-panel admin-modern-panel">
+      <div class="admin-heading-row">
         <div>
-          <p class="product-category">Admin Panel</p>
-          <h1>${title}</h1>
-          <p>${subtitle}</p>
+          <h1>${escapeHTML(title)}</h1>
+          <p>${escapeHTML(subtitle)}</p>
         </div>
-        <button class="btn btn-outline" onclick="handleLogout()">Logout</button>
+        <div class="admin-heading-actions">${actions}</div>
       </div>
       ${content}
     </div>
+  `;
+}
+
+function adminMetricCard(title, value, note = '', tone = 'teal', icon = '') {
+  return `
+    <article class="admin-metric-card tone-${tone}">
+      <div class="admin-metric-top">
+        <span>${escapeHTML(title)}</span>
+        <span class="admin-metric-icon">${icon}</span>
+      </div>
+      <strong>${value}</strong>
+      ${note ? `<small>${note}</small>` : ''}
+    </article>
+  `;
+}
+
+function createAdminLineChart(values, labels, options = {}) {
+  const width = options.width || 520;
+  const height = options.height || 280;
+  const padX = 48;
+  const padY = 34;
+  const min = options.min ?? 0;
+  const max = options.max || Math.max(...values, 1);
+  const usableW = width - padX - 24;
+  const usableH = height - padY - 28;
+  const points = values.map((value, index) => {
+    const x = padX + (usableW / Math.max(values.length - 1, 1)) * index;
+    const y = padY + usableH - ((value - min) / Math.max(max - min, 1)) * usableH;
+    return { x, y, value };
+  });
+  const line = points.map(point => `${point.x},${point.y}`).join(' ');
+  const area = `${padX},${padY + usableH} ${line} ${padX + usableW},${padY + usableH}`;
+  const ticks = [0, 0.25, 0.5, 0.75, 1];
+
+  return `
+    <svg class="admin-chart-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Line chart">
+      ${ticks.map(tick => {
+        const y = padY + usableH - usableH * tick;
+        const val = Math.round(min + (max - min) * tick);
+        return `<g><line x1="${padX}" y1="${y}" x2="${padX + usableW}" y2="${y}" class="chart-grid"/><text x="${padX - 10}" y="${y + 5}" text-anchor="end" class="chart-label">${val}</text></g>`;
+      }).join('')}
+      ${labels.map((label, index) => {
+        const x = padX + (usableW / Math.max(labels.length - 1, 1)) * index;
+        return `<g><line x1="${x}" y1="${padY}" x2="${x}" y2="${padY + usableH}" class="chart-grid"/><text x="${x}" y="${height - 10}" text-anchor="middle" class="chart-label">${escapeHTML(label)}</text></g>`;
+      }).join('')}
+      <polyline points="${area}" class="chart-area"/>
+      <polyline points="${line}" class="chart-line"/>
+      ${points.map(point => `<circle cx="${point.x}" cy="${point.y}" r="6" class="chart-dot"/>`).join('')}
+    </svg>
+  `;
+}
+
+function createAdminBarChart(seriesA, seriesB, labels) {
+  const width = 520;
+  const height = 280;
+  const padX = 50;
+  const padY = 34;
+  const usableW = width - padX - 24;
+  const usableH = height - padY - 36;
+  const max = Math.max(...seriesA, ...seriesB, 1);
+  const groupW = usableW / labels.length;
+  return `
+    <svg class="admin-chart-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Bar chart">
+      ${[0, .25, .5, .75, 1].map(tick => {
+        const y = padY + usableH - usableH * tick;
+        return `<line x1="${padX}" y1="${y}" x2="${padX + usableW}" y2="${y}" class="chart-grid"/><text x="${padX - 10}" y="${y + 5}" text-anchor="end" class="chart-label">${Math.round(max * tick)}</text>`;
+      }).join('')}
+      ${labels.map((label, index) => {
+        const baseX = padX + index * groupW + groupW * .22;
+        const aH = (seriesA[index] / max) * usableH;
+        const bH = (seriesB[index] / max) * usableH;
+        return `
+          <rect x="${baseX}" y="${padY + usableH - aH}" width="20" height="${aH}" rx="5" class="chart-bar-a"/>
+          <rect x="${baseX + 34}" y="${padY + usableH - bH}" width="20" height="${bH}" rx="5" class="chart-bar-b"/>
+          <text x="${baseX + 26}" y="${height - 10}" text-anchor="middle" class="chart-label">${escapeHTML(label)}</text>
+        `;
+      }).join('')}
+    </svg>
   `;
 }
 
@@ -1295,93 +1453,236 @@ function renderAdminDashboard() {
   const orders = allOrders();
   const revenue = orders.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const pending = orders.filter(order => order.status === 'pending').length;
-  const lowStock = PRODUCTS_DATA.filter(product => product.stock < 20).length;
+  const lowStock = PRODUCTS_DATA.filter(product => product.stock < 20);
+  const flashProducts = PRODUCTS_DATA.filter(product => product.isFlashSale);
+  const statusCounts = getOrderStatusCounts();
 
-  page.innerHTML = adminShell('Dashboard', 'Live overview of your HaatHub store.', `
-    <div class="stats-grid">
-      <div class="stat-card"><h3>Total Orders</h3><p class="stat-value">${orders.length}</p></div>
-      <div class="stat-card"><h3>Total Revenue</h3><p class="stat-value">${formatPrice(revenue)}</p></div>
-      <div class="stat-card"><h3>Products</h3><p class="stat-value">${PRODUCTS_DATA.length}</p></div>
-      <div class="stat-card"><h3>Pending Orders</h3><p class="stat-value">${pending}</p></div>
+  page.innerHTML = adminShell('Dashboard Overview', "Welcome back! Here's what's happening today.", `
+    <div class="admin-stats-grid">
+      ${adminMetricCard('Total Sales', formatPrice(revenue), '+12% from last month', 'teal', adminIcon('sales'))}
+      ${adminMetricCard('Total Orders', orders.length, '+8% from last week', 'blue', adminIcon('orders'))}
+      ${adminMetricCard('Pending Orders', pending, 'Requires attention', 'orange', adminIcon('clock'))}
+      ${adminMetricCard('Total Products', PRODUCTS_DATA.length, `${lowStock.length} low stock`, 'purple', adminIcon('package'))}
     </div>
-    <div class="admin-grid-two">
+
+    <div class="admin-dashboard-grid">
+      <section class="admin-card admin-chart-card">
+        <h2>${adminIcon('trend')} Weekly Sales</h2>
+        ${createAdminLineChart([12000, 19000, 15000, 22000, 28000, 32000, 24000], ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'], { max: 32000 })}
+      </section>
+      <section class="admin-card admin-chart-card">
+        <h2>Order Status Distribution</h2>
+        <div class="admin-pie-wrap">
+          <div class="admin-pie" style="background: conic-gradient(var(--admin-orange) 0 120deg, var(--admin-blue) 120deg 190deg, var(--admin-indigo) 190deg 260deg, var(--admin-green) 260deg 360deg);"></div>
+          <div class="admin-pie-labels">
+            <span class="pie-orange">Pending: ${statusCounts.pending || 0}</span>
+            <span class="pie-blue">Confirmed: ${statusCounts.confirmed || 1}</span>
+            <span class="pie-indigo">Shipped: ${statusCounts.shipped || 0}</span>
+            <span class="pie-green">Delivered: ${statusCounts.delivered || 0}</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div class="admin-dashboard-grid lower-grid">
       <section class="admin-card">
         <h2>Recent Orders</h2>
-        ${orders.slice(-5).reverse().map(order => `
-          <div class="admin-list-row"><span>${order.id}</span><strong>${formatPrice(order.total)}</strong><em class="status-${order.status}">${order.status}</em></div>
-        `).join('')}
+        <div class="admin-order-stack">
+          ${orders.slice(-5).reverse().map(order => `
+            <div class="admin-order-pill">
+              <div><strong>${escapeHTML(order.id)}</strong><span>${escapeHTML(order.customer?.name || 'Customer')}</span></div>
+              <b>${formatPrice(order.total)}</b>
+              <em class="status-${order.status}">${escapeHTML(order.status)}</em>
+            </div>
+          `).join('')}
+        </div>
       </section>
-      <section class="admin-card">
-        <h2>Store Health</h2>
-        <div class="admin-list-row"><span>Low stock products</span><strong>${lowStock}</strong></div>
-        <div class="admin-list-row"><span>Support threads</span><strong>${MESSAGES_DATA.length}</strong></div>
-        <div class="admin-list-row"><span>Flash sale items</span><strong>${PRODUCTS_DATA.filter(p => p.isFlashSale).length}</strong></div>
-      </section>
+      <div class="admin-side-stack">
+        <section class="admin-card admin-alert-card danger">
+          <h2>${adminIcon('alert')} Low Stock Alert</h2>
+          ${lowStock.slice(0, 4).map(product => `<div class="admin-alert-row"><span>${escapeHTML(product.name)}</span><b>${product.stock} left</b></div>`).join('') || '<p class="muted">No low stock products.</p>'}
+        </section>
+        <section class="admin-card admin-alert-card flash">
+          <h2>${adminIcon('flash')} Active Flash Sales</h2>
+          ${flashProducts.slice(0, 5).map(product => `<div class="admin-alert-row"><span>${escapeHTML(product.name)}</span><b>${product.discount}% OFF</b></div>`).join('')}
+        </section>
+        <section class="admin-card admin-alert-card info">
+          <h2>Unread Messages <span>${getAdminInbox().filter(thread => thread.unread).length}</span></h2>
+          <p>You have ${getAdminInbox().filter(thread => thread.unread).length} unread customer messages</p>
+        </section>
+      </div>
     </div>
   `);
+}
+
+function renderAdminProductRows() {
+  const tbody = $('#admin-products-tbody');
+  const count = $('#admin-products-count');
+  if (!tbody) return;
+  const query = ($('#admin-product-search')?.value || '').toLowerCase().trim();
+  const category = $('#admin-product-category')?.value || 'all';
+  const filtered = PRODUCTS_DATA.filter(product => {
+    const matchesQuery = !query || product.name.toLowerCase().includes(query) || product.category.toLowerCase().includes(query);
+    const matchesCategory = category === 'all' || product.category === category;
+    return matchesQuery && matchesCategory;
+  });
+  if (count) count.textContent = `Showing ${filtered.length} products`;
+
+  tbody.innerHTML = filtered.map(product => `
+    <tr>
+      <td>
+        <div class="admin-product-cell">
+          <img src="${product.image}" alt="${escapeHTML(product.name)}">
+          <div><strong>${escapeHTML(product.name)}</strong>${product.isFlashSale ? '<span class="admin-mini-badge orange">Flash Sale</span>' : ''}</div>
+        </div>
+      </td>
+      <td>${escapeHTML(product.category)}</td>
+      <td><strong>${formatPrice(product.price)}</strong>${product.oldPrice ? `<span class="admin-old-price">${formatPrice(product.oldPrice)}</span>` : ''}</td>
+      <td><strong>${product.stock}</strong>${product.stock < 20 ? '<span class="admin-mini-badge red">Low</span>' : ''}</td>
+      <td><span class="status-active">In Stock</span></td>
+      <td>
+        <button class="admin-icon-btn" title="Edit" onclick="showToast('Edit product form can be connected to backend.', 'info')">✎</button>
+        <button class="admin-icon-btn" title="Delete" onclick="showToast('Delete action disabled in demo.', 'info')">🗑</button>
+      </td>
+    </tr>
+  `).join('') || '<tr><td colspan="6" class="muted">No products found.</td></tr>';
 }
 
 function renderAdminProducts() {
   const page = $('#admin-products-page');
   if (!page) return;
-  page.innerHTML = adminShell('Products', 'Inventory and pricing overview.', `
-    <div class="admin-card table-card">
-      <table class="admin-table">
-        <thead><tr><th>Product</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th></tr></thead>
-        <tbody>${PRODUCTS_DATA.map(product => `
-          <tr>
-            <td>${escapeHTML(product.name)}</td>
-            <td>${escapeHTML(product.category)}</td>
-            <td>${formatPrice(product.price)}</td>
-            <td>${product.stock}</td>
-            <td><span class="${product.stock > 0 ? 'status-active' : 'status-inactive'}">${product.stock > 0 ? 'In Stock' : 'Out of Stock'}</span></td>
-          </tr>
-        `).join('')}</tbody>
+  const categories = ['all', ...new Set(PRODUCTS_DATA.map(product => product.category))];
+  page.innerHTML = adminShell('Product Management', 'Manage your product inventory', `
+    <section class="admin-card admin-toolbar-card">
+      <div class="admin-search-field"><span>⌕</span><input id="admin-product-search" type="search" placeholder="Search products..." oninput="renderAdminProductRows()"></div>
+      <select id="admin-product-category" onchange="renderAdminProductRows()">${categories.map(cat => `<option value="${escapeHTML(cat)}">${cat === 'all' ? 'All Categories' : escapeHTML(cat)}</option>`).join('')}</select>
+      <p id="admin-products-count">Showing ${PRODUCTS_DATA.length} products</p>
+    </section>
+    <section class="admin-table-shell">
+      <table class="admin-table admin-management-table">
+        <thead><tr><th>Product</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="admin-products-tbody"></tbody>
       </table>
-    </div>
-  `);
+    </section>
+  `, `<button class="btn btn-primary admin-top-btn" onclick="showToast('Add Product modal can be connected to backend.', 'info')">+ Add Product</button>`);
+  renderAdminProductRows();
+}
+
+function renderAdminOrderRows() {
+  const tbody = $('#admin-orders-tbody');
+  const count = $('#admin-orders-count');
+  if (!tbody) return;
+  const query = ($('#admin-order-search')?.value || '').toLowerCase().trim();
+  const status = $('#admin-order-status')?.value || 'all';
+  const filtered = allOrders().filter(order => {
+    const customer = order.customer || {};
+    const matchesQuery = !query || order.id.toLowerCase().includes(query) || (customer.name || '').toLowerCase().includes(query) || (customer.phone || '').toLowerCase().includes(query);
+    const matchesStatus = status === 'all' || order.status === status;
+    return matchesQuery && matchesStatus;
+  });
+  if (count) count.textContent = `Showing ${filtered.length} orders`;
+
+  tbody.innerHTML = filtered.slice().reverse().map(order => `
+    <tr>
+      <td><strong>${escapeHTML(order.id)}</strong></td>
+      <td><strong>${escapeHTML(order.customer?.name || 'Customer')}</strong><span>${escapeHTML(order.customer?.phone || order.customer?.email || '')}</span></td>
+      <td>${formatDate(order.date)}</td>
+      <td><strong>${formatPrice(order.total)}</strong></td>
+      <td><span class="admin-mini-badge yellow">${escapeHTML(order.paymentMethod || 'COD')}</span></td>
+      <td><span class="status-${order.status}">${escapeHTML(order.status)}</span></td>
+      <td><button class="admin-icon-btn" title="View order" onclick="showToast('Order detail preview can be connected to backend.', 'info')">👁</button></td>
+    </tr>
+  `).join('') || '<tr><td colspan="7" class="muted">No orders found.</td></tr>';
 }
 
 function renderAdminOrders() {
   const page = $('#admin-orders-page');
   if (!page) return;
-  page.innerHTML = adminShell('Orders', 'Manage customer orders and fulfillment status.', `
-    <div class="admin-card table-card">
-      <table class="admin-table">
-        <thead><tr><th>Order ID</th><th>Customer</th><th>Total</th><th>Status</th><th>Date</th></tr></thead>
-        <tbody>${allOrders().slice().reverse().map(order => `
-          <tr>
-            <td>${escapeHTML(order.id)}</td>
-            <td>${escapeHTML(order.customer?.name || 'Customer')}</td>
-            <td>${formatPrice(order.total)}</td>
-            <td><span class="status-${order.status}">${escapeHTML(order.status)}</span></td>
-            <td>${formatDate(order.date)}</td>
-          </tr>
-        `).join('')}</tbody>
-      </table>
+  const orders = allOrders();
+  const statusCounts = getOrderStatusCounts();
+  page.innerHTML = adminShell('Order Management', 'Track and manage customer orders', `
+    <div class="admin-order-stats">
+      ${adminMetricCard('Total Orders', orders.length, '', 'plain')}
+      ${adminMetricCard('Pending', statusCounts.pending || 0, '', 'plain-orange')}
+      ${adminMetricCard('Shipped', statusCounts.shipped || 0, '', 'plain-blue')}
+      ${adminMetricCard('Delivered', statusCounts.delivered || 0, '', 'plain-green')}
     </div>
+    <section class="admin-card admin-toolbar-card">
+      <div class="admin-search-field"><span>⌕</span><input id="admin-order-search" type="search" placeholder="Search orders or customers..." oninput="renderAdminOrderRows()"></div>
+      <select id="admin-order-status" onchange="renderAdminOrderRows()">
+        <option value="all">All Statuses</option>
+        <option value="pending">Pending</option>
+        <option value="confirmed">Confirmed</option>
+        <option value="packed">Packed</option>
+        <option value="shipped">Shipped</option>
+        <option value="delivered">Delivered</option>
+      </select>
+      <p id="admin-orders-count">Showing ${orders.length} orders</p>
+    </section>
+    <section class="admin-table-shell">
+      <table class="admin-table admin-management-table">
+        <thead><tr><th>Order ID</th><th>Customer</th><th>Date</th><th>Total</th><th>Payment</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="admin-orders-tbody"></tbody>
+      </table>
+    </section>
   `);
+  renderAdminOrderRows();
 }
 
-function renderAdminMessages() {
+function renderAdminMessages(selectedId = null) {
   const page = $('#admin-messages-page');
   if (!page) return;
-  page.innerHTML = adminShell('Messages', 'Customer support inbox.', `
-    <div class="messages-list admin-card">
-      ${MESSAGES_DATA.map(thread => `
-        <article class="message-card">
-          <div class="message-card-head">
-            <div><h3>${escapeHTML(thread.subject)}</h3><p>From: ${escapeHTML(thread.customer.name)} (${escapeHTML(thread.customer.email)})</p></div>
-            <span class="status-${thread.status}">${escapeHTML(thread.status)}</span>
-          </div>
-          <div class="message-thread">
-            ${thread.messages.map(message => `<p><strong>${message.sender === 'admin' ? 'Admin' : 'Customer'}:</strong> ${escapeHTML(message.text)}</p>`).join('')}
-          </div>
-          <button class="btn btn-outline btn-sm" onclick="showToast('Reply composer would connect to backend in production.', 'info')">Reply</button>
-        </article>
-      `).join('')}
+  const threads = getAdminInbox();
+  const selected = threads.find(thread => thread.id === Number(selectedId)) || threads[0];
+  if (selected) selected.unread = false;
+
+  page.innerHTML = adminShell('Customer Messages', 'Chat with your customers', `
+    <div class="admin-messenger-card">
+      <aside class="admin-conversation-list">
+        <div class="admin-search-field compact"><span>⌕</span><input type="search" placeholder="Search conversations..."></div>
+        <div class="admin-thread-list">
+          ${threads.map(thread => `
+            <button class="admin-thread-item ${thread.id === selected.id ? 'active' : ''}" onclick="renderAdminMessages(${thread.id})">
+              <span class="admin-avatar">${escapeHTML(thread.customer.name.split(' ').map(part => part[0]).join('').slice(0,2))}</span>
+              <span><strong>${escapeHTML(thread.customer.name)}</strong><small>${escapeHTML(thread.time)}</small><em>${escapeHTML(thread.messages[thread.messages.length - 1].text)}</em><b>${escapeHTML(thread.orderId)}</b></span>
+              ${thread.unread ? '<i>New</i>' : ''}
+            </button>
+          `).join('')}
+        </div>
+      </aside>
+      <section class="admin-chat-pane">
+        <header>
+          <span class="admin-avatar large">${escapeHTML(selected.customer.name.split(' ').map(part => part[0]).join('').slice(0,2))}</span>
+          <div><h2>${escapeHTML(selected.customer.name)}</h2><p>${escapeHTML(selected.orderId)}</p></div>
+        </header>
+        <div class="admin-chat-history" id="admin-chat-history">
+          ${selected.messages.map(message => `
+            <div class="admin-chat-bubble ${message.sender === 'admin' ? 'admin-reply' : 'customer-reply'}">
+              <p>${escapeHTML(message.text)}</p><span>${escapeHTML(message.time)}</span>
+            </div>
+          `).join('')}
+        </div>
+        <div class="admin-chat-input">
+          <input id="admin-reply-input" type="text" placeholder="Type your message..." onkeydown="if(event.key==='Enter'){sendAdminReply(${selected.id})}">
+          <button class="btn btn-primary btn-icon" onclick="sendAdminReply(${selected.id})">✈</button>
+        </div>
+      </section>
     </div>
   `);
+  const chat = $('#admin-chat-history');
+  if (chat) chat.scrollTop = chat.scrollHeight;
+}
+
+function sendAdminReply(threadId) {
+  const input = $('#admin-reply-input');
+  const text = input?.value.trim();
+  if (!input || !text) return;
+  const thread = getAdminInbox().find(item => item.id === Number(threadId));
+  if (!thread) return;
+  thread.messages.push({ sender: 'admin', text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+  input.value = '';
+  renderAdminMessages(threadId);
+  showToast('Reply added to this demo inbox.');
 }
 
 function renderAdminAnalytics() {
@@ -1389,75 +1690,204 @@ function renderAdminAnalytics() {
   if (!page) return;
   const orders = allOrders();
   const revenue = orders.reduce((sum, order) => sum + Number(order.total || 0), 0);
-  const categories = [...new Set(PRODUCTS_DATA.map(product => product.category))];
-  const maxStock = Math.max(...PRODUCTS_DATA.map(product => product.stock));
+  const avgOrder = orders.length ? Math.round(revenue / orders.length) : 0;
+  const topProducts = [...PRODUCTS_DATA].sort((a, b) => b.reviews - a.reviews).slice(0, 4);
+  const categories = ['Electronics', 'Fashion', 'Home & Living', 'Sports', 'Books'];
+  const categoryValues = [125000, 98000, 87000, 65000, 45000];
+  const maxCategory = Math.max(...categoryValues);
 
-  page.innerHTML = adminShell('Analytics', 'Revenue, category and stock performance.', `
-    <div class="stats-grid">
-      <div class="stat-card"><h3>Revenue</h3><p class="stat-value">${formatPrice(revenue)}</p></div>
-      <div class="stat-card"><h3>Average Order</h3><p class="stat-value">${formatPrice(orders.length ? revenue / orders.length : 0)}</p></div>
-      <div class="stat-card"><h3>Conversion Proxy</h3><p class="stat-value">${Math.min(100, Math.round((orders.length / PRODUCTS_DATA.length) * 10))}%</p></div>
-      <div class="stat-card"><h3>Support Resolved</h3><p class="stat-value">${MESSAGES_DATA.filter(m => m.status === 'resolved').length}</p></div>
+  page.innerHTML = adminShell('Analytics & Insights', 'Track your business performance and growth', `
+    <div class="admin-stats-grid">
+      ${adminMetricCard('Total Revenue', formatPrice(revenue), '↗ +18.2% vs last period', 'teal', adminIcon('sales'))}
+      ${adminMetricCard('Total Orders', orders.length, '↗ +12.5% vs last period', 'blue', adminIcon('orders'))}
+      ${adminMetricCard('Avg Order Value', formatPrice(avgOrder), '↗ +5.3% vs last period', 'purple', adminIcon('package'))}
+      ${adminMetricCard('Conversion Rate', '3.2%', '↘ -0.8% vs last period', 'cyan', adminIcon('trend'))}
     </div>
-    <div class="admin-grid-two">
-      <section class="admin-card"><h2>Stock by Category</h2>
-        ${categories.map(category => {
-          const stock = PRODUCTS_DATA.filter(p => p.category === category).reduce((sum, p) => sum + p.stock, 0);
-          const pct = Math.min(100, Math.round((stock / (maxStock * 3)) * 100));
-          return `<div class="bar-row"><span>${escapeHTML(category)}</span><div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div><strong>${stock}</strong></div>`;
-        }).join('')}
+    <div class="admin-dashboard-grid">
+      <section class="admin-card admin-chart-card"><h2>${adminIcon('trend')} Revenue Trend</h2>${createAdminLineChart([145000, 165000, 192000, 178000, 215000, 248000], ['Jan','Feb','Mar','Apr','May','Jun'], { max: 260000 })}</section>
+      <section class="admin-card admin-chart-card"><h2>Customer Acquisition</h2>${createAdminBarChart([45, 55, 62, 59, 68, 75], [75, 92, 105, 96, 121, 138], ['Jan','Feb','Mar','Apr','May','Jun'])}<div class="admin-legend"><span><i class="legend-a"></i>New Customers</span><span><i class="legend-b"></i>Returning</span></div></section>
+    </div>
+    <div class="admin-dashboard-grid lower-grid">
+      <section class="admin-card"><h2>Category Performance</h2>
+        ${categories.map((category, index) => `
+          <div class="admin-progress-row"><div><strong>${escapeHTML(category)}</strong><b>${formatPrice(categoryValues[index])}</b><em class="${index === 3 ? 'down' : ''}">${index === 3 ? '↘ 3.1%' : `↗ ${[12.5,8.3,15.2,3.1,5.7][index]}%`}</em></div><span><i style="width:${Math.round((categoryValues[index]/maxCategory)*100)}%"></i></span></div>
+        `).join('')}
       </section>
-      <section class="admin-card"><h2>Order Status</h2>
-        ${['pending', 'shipped', 'delivered'].map(status => {
-          const count = orders.filter(order => order.status === status).length;
-          const pct = orders.length ? Math.round((count / orders.length) * 100) : 0;
-          return `<div class="bar-row"><span>${status}</span><div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div><strong>${count}</strong></div>`;
-        }).join('')}
+      <section class="admin-card"><h2>Top Selling Products</h2>
+        <div class="admin-top-products">
+          ${topProducts.map((product, index) => `<div><span>#${index + 1}</span><strong>${escapeHTML(product.name)}</strong><small>${product.reviews * 12} sold</small><b>${formatPrice(product.price * product.reviews)}</b></div>`).join('')}
+        </div>
       </section>
     </div>
-  `);
+  `, `<button class="btn btn-primary admin-top-btn" onclick="showToast('Report export can be connected to backend.', 'info')">⇩ Export Report</button>`);
 }
 
 function renderAdminFlashSales() {
   const page = $('#admin-flash-sales-page');
   if (!page) return;
   const flashProducts = PRODUCTS_DATA.filter(product => product.isFlashSale);
-  page.innerHTML = adminShell('Flash Sales', 'Current limited-time campaigns.', `
-    <div class="admin-card table-card">
-      <table class="admin-table">
-        <thead><tr><th>Product</th><th>Discount</th><th>Sale Price</th><th>Ends In</th><th>Stock</th></tr></thead>
-        <tbody>${flashProducts.map(product => `
-          <tr>
-            <td>${escapeHTML(product.name)}</td>
-            <td>${product.discount}%</td>
-            <td>${formatPrice(product.price)}</td>
-            <td><span data-countdown="${product.flashSaleEndTime}" data-compact="true"></span></td>
-            <td>${product.stock}</td>
-          </tr>
-        `).join('')}</tbody>
-      </table>
-    </div>
-  `);
-  updateCountdowns();
+  page.innerHTML = adminShell('Flash Sales Management', 'Create and manage flash sales campaigns', `
+    <section class="admin-campaign-card active">
+      <div class="admin-campaign-head">
+        <div><h2>${adminIcon('flash')} Weekend Mega Sale <span>Active</span></h2><p>📅 ${formatDate(new Date())} - ${formatDate(new Date(Date.now() + 86400000))} &nbsp;&nbsp; ◷ 12:00 AM - 11:59 PM</p></div>
+        <div class="admin-campaign-discount"><strong>30%</strong><span>Discount</span></div>
+        <div class="admin-campaign-actions"><button class="admin-icon-btn">Ⅱ</button><button class="admin-icon-btn">🗑</button></div>
+      </div>
+      <div class="admin-campaign-body"><h3>Products in Sale (${flashProducts.length})</h3><button class="btn btn-outline" onclick="openFlashSaleModal()">+ Add Products</button></div>
+    </section>
+    <section class="admin-campaign-card scheduled">
+      <div class="admin-campaign-head">
+        <div><h2>${adminIcon('flash')} Spring Collection Launch <span>Scheduled</span></h2><p>📅 ${formatDate(new Date(Date.now() + 4*86400000))} - ${formatDate(new Date(Date.now() + 7*86400000))} &nbsp;&nbsp; ◷ 10:00 AM - 11:59 PM</p></div>
+        <div class="admin-campaign-discount"><strong>25%</strong><span>Discount</span></div>
+        <div class="admin-campaign-actions"><button class="admin-icon-btn">▶</button><button class="admin-icon-btn">🗑</button></div>
+      </div>
+      <div class="admin-campaign-body"><h3>Products in Sale (3)</h3><button class="btn btn-outline" onclick="openFlashSaleModal()">+ Add Products</button></div>
+    </section>
+  `, `<button class="btn btn-primary admin-orange-btn" onclick="openFlashSaleModal()">⚡ Create Flash Sale</button>`);
 }
 
-function renderAdminSettings() {
+function openFlashSaleModal() {
+  closeAdminModal();
+  ADMIN_SELECTED_FLASH_PRODUCTS = new Set();
+  const modal = document.createElement('div');
+  modal.className = 'admin-modal-overlay';
+  modal.id = 'admin-flash-modal';
+  modal.innerHTML = `
+    <div class="admin-modal-card">
+      <button class="admin-modal-close" onclick="closeAdminModal()">×</button>
+      <h2>Create New Flash Sale</h2>
+      <p>Schedule a flash sale and select products to include</p>
+      <form onsubmit="createFlashSale(event)">
+        <div class="form-grid">
+          <div class="form-group"><label>Sale Name *</label><input required placeholder="e.g., Weekend Mega Sale"></div>
+          <div class="form-group"><label>Discount (%) *</label><input type="number" min="1" max="90" value="20" required></div>
+        </div>
+        <div class="form-grid">
+          <div class="form-group"><label>Start Date & Time *</label><input type="datetime-local" required></div>
+          <div class="form-group"><label>End Date & Time *</label><input type="datetime-local" required></div>
+        </div>
+        <label class="admin-modal-label">Select Products for Flash Sale</label>
+        <div class="admin-product-picker">
+          ${PRODUCTS_DATA.map(product => `
+            <button type="button" class="admin-picker-row" data-picker-product="${product.id}" onclick="toggleAdminProductSelection('${product.id}')">
+              <span class="admin-toggle"><i></i></span>
+              <span><strong>${escapeHTML(product.name)}</strong><small>${formatPrice(product.price)}</small></span>
+              <em>${escapeHTML(product.category)}</em>
+            </button>
+          `).join('')}
+        </div>
+        <p class="muted"><span id="admin-selected-count">0</span> products selected</p>
+        <div class="admin-modal-actions"><button type="button" class="btn btn-outline" onclick="closeAdminModal()">Cancel</button><button class="btn btn-primary" type="submit">Create Flash Sale</button></div>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(modal);
+}
+
+function toggleAdminProductSelection(productId) {
+  const row = document.querySelector(`[data-picker-product="${productId}"]`);
+  if (ADMIN_SELECTED_FLASH_PRODUCTS.has(productId)) {
+    ADMIN_SELECTED_FLASH_PRODUCTS.delete(productId);
+    row?.classList.remove('selected');
+  } else {
+    ADMIN_SELECTED_FLASH_PRODUCTS.add(productId);
+    row?.classList.add('selected');
+  }
+  const count = $('#admin-selected-count');
+  if (count) count.textContent = ADMIN_SELECTED_FLASH_PRODUCTS.size;
+}
+
+function createFlashSale(event) {
+  event.preventDefault();
+  if (ADMIN_SELECTED_FLASH_PRODUCTS.size === 0) {
+    showToast('Select at least one product for the flash sale.', 'error');
+    return;
+  }
+  closeAdminModal();
+  showToast('Flash sale created in demo mode.');
+}
+
+function closeAdminModal() {
+  const modal = $('#admin-flash-modal');
+  if (modal) modal.remove();
+}
+
+function adminSettingsTab(tab, activeTab, label, icon = '') {
+  return `<button class="admin-settings-tab ${tab === activeTab ? 'active' : ''}" onclick="renderAdminSettings('${tab}')">${icon}${label}</button>`;
+}
+
+function adminToggle(on = false) {
+  return `<button type="button" class="admin-toggle-switch ${on ? 'on' : ''}" onclick="this.classList.toggle('on')"><span></span></button>`;
+}
+
+function renderAdminSettings(activeTab = 'store') {
   const page = $('#admin-settings-page');
   if (!page) return;
-  page.innerHTML = adminShell('Settings', 'Store configuration preview.', `
-    <form class="admin-card settings-form" onsubmit="event.preventDefault(); showToast('Settings saved locally for demo.', 'success')">
-      <div class="form-grid">
-        <div class="form-group"><label>Store Name</label><input value="HaatHub"></div>
-        <div class="form-group"><label>Support Email</label><input value="support@haathub.com"></div>
-      </div>
-      <div class="form-grid">
-        <div class="form-group"><label>Free Delivery Threshold</label><input value="1000"></div>
-        <div class="form-group"><label>Default Payment</label><input value="Cash on Delivery"></div>
-      </div>
-      <div class="form-group"><label>Announcement</label><textarea rows="3">Free delivery on orders above ৳1000</textarea></div>
-      <button class="btn btn-primary" type="submit">Save Settings</button>
-    </form>
-  `);
+
+  const tabs = `
+    <div class="admin-settings-tabs">
+      ${adminSettingsTab('store', activeTab, 'Store', '🏬')}
+      ${adminSettingsTab('notifications', activeTab, 'Notifications', '🔔')}
+      ${adminSettingsTab('payment', activeTab, 'Payment', '$')}
+      ${adminSettingsTab('shipping', activeTab, 'Shipping', '🚚')}
+      ${adminSettingsTab('security', activeTab, 'Security', '🛡')}
+    </div>
+  `;
+
+  const content = {
+    store: `
+      <form class="admin-settings-card" onsubmit="event.preventDefault(); showToast('Store settings saved.')">
+        <h2>${adminIcon('settings')} Store Information</h2>
+        <div class="admin-settings-body">
+          <div class="form-grid"><div class="form-group"><label>Store Name</label><input value="HaatHub"></div><div class="form-group"><label>Store Email</label><input value="admin@haathub.com"></div></div>
+          <div class="form-grid"><div class="form-group"><label>Store Phone</label><input value="+880 1711-123456"></div><div class="form-group"><label>Currency</label><select><option>BDT (৳)</option></select></div></div>
+          <div class="form-group"><label>Store Address</label><input value="123 Digital Bazar, Dhaka 1212, Bangladesh"></div>
+          <div class="form-group"><label>Store Description</label><textarea rows="3">Your Digital হাট - Bangladesh's premier online marketplace</textarea></div>
+          <div class="form-grid"><div class="form-group"><label>Products Per Page</label><select><option>12 Products</option></select></div><div class="form-group"><label>Time Zone</label><select><option>Asia/Dhaka (GMT+6)</option></select></div></div>
+          <button class="btn btn-primary admin-save-btn">▣ Save Changes</button>
+        </div>
+      </form>`,
+    notifications: `
+      <form class="admin-settings-card" onsubmit="event.preventDefault(); showToast('Notification settings saved.')">
+        <h2>🔔 Notification Preferences</h2>
+        <div class="admin-settings-body admin-switch-list">
+          ${['New order alerts', 'Low stock alerts', 'Customer message alerts', 'Flash sale reminders', 'Daily sales summary'].map((item, i) => `<div><span><strong>${item}</strong><small>${i < 3 ? 'Send immediate notification' : 'Send scheduled notification'}</small></span>${adminToggle(i < 3)}</div>`).join('')}
+          <button class="btn btn-primary admin-save-btn">▣ Save Changes</button>
+        </div>
+      </form>`,
+    payment: `
+      <form class="admin-settings-card" onsubmit="event.preventDefault(); showToast('Payment settings saved.')">
+        <h2>$ Payment Methods</h2>
+        <div class="admin-settings-body admin-switch-list">
+          <div><span><strong>Cash on Delivery (COD)</strong><small>Allow customers to pay on delivery</small></span>${adminToggle(true)}</div>
+          <div><span><strong>bKash Payment</strong><small>Enable bKash mobile wallet payments</small></span>${adminToggle(true)}</div>
+          <div><span><strong>Nagad Payment</strong><small>Enable Nagad mobile wallet payments</small></span>${adminToggle(false)}</div>
+          <div><span><strong>SSLCommerz Gateway</strong><small>Enable SSLCommerz payment gateway</small></span>${adminToggle(false)}</div>
+          <button class="btn btn-primary admin-save-btn">▣ Save Changes</button>
+        </div>
+      </form>`,
+    shipping: `
+      <form class="admin-settings-card" onsubmit="event.preventDefault(); showToast('Shipping settings saved.')">
+        <h2>🚚 Shipping Configuration</h2>
+        <div class="admin-settings-body">
+          <div class="form-grid"><div class="form-group"><label>Standard Shipping Cost (৳)</label><input value="60"><small>Delivery in 5-7 business days</small></div><div class="form-group"><label>Express Shipping Cost (৳)</label><input value="120"><small>Delivery in 2-3 business days</small></div></div>
+          <div class="form-group"><label>Free Shipping Threshold (৳)</label><input value="1500"><small>Orders above this amount get free shipping</small></div>
+          <div class="admin-info-box"><strong>Current Setup:</strong> Free shipping on orders ৳1500+, otherwise ৳60 standard or ৳120 express.</div>
+          <button class="btn btn-primary admin-save-btn">▣ Save Changes</button>
+        </div>
+      </form>`,
+    security: `
+      <form class="admin-settings-card" onsubmit="event.preventDefault(); showToast('Security settings saved.')">
+        <h2>🛡 Security & Privacy</h2>
+        <div class="admin-settings-body admin-switch-list">
+          <div><span><strong>Two-Factor Authentication</strong><small>Add an extra layer of security to your account</small></span>${adminToggle(false)}</div>
+          <div class="form-group"><label>Session Timeout (minutes)</label><select><option>30 minutes</option><option>60 minutes</option><option>120 minutes</option></select><small>Auto-logout after inactivity</small></div>
+          <button class="btn btn-primary admin-save-btn">▣ Save Changes</button>
+        </div>
+      </form>`
+  };
+
+  page.innerHTML = adminShell('Settings', 'Manage your store configuration and preferences', `${tabs}${content[activeTab] || content.store}`);
 }
 
 // ========================================
