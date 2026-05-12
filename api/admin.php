@@ -5,6 +5,7 @@ $action = action_name();
 require_admin();
 
 if ($action === 'dashboard' || $action === 'analytics') {
+    refresh_product_flash_flags();
     $pdo = db();
     $totalOrders = (int)$pdo->query('SELECT COUNT(*) FROM orders')->fetchColumn();
     $totalRevenue = (float)$pdo->query('SELECT COALESCE(SUM(total_amount),0) FROM orders WHERE status != "cancelled"')->fetchColumn();
@@ -17,6 +18,8 @@ if ($action === 'dashboard' || $action === 'analytics') {
     $statusCounts = [];
     foreach ($statusRows as $row) $statusCounts[$row['status']] = (int)$row['count'];
     $categoryRows = $pdo->query('SELECT c.name, COALESCE(SUM(oi.total_price),0) AS revenue FROM categories c LEFT JOIN products p ON p.category_id=c.id LEFT JOIN order_items oi ON oi.product_id=p.id GROUP BY c.id, c.name ORDER BY revenue DESC')->fetchAll();
+    $activeFlash = $pdo->query('SELECT id, name, discount_percent, start_time, end_time FROM flash_sales WHERE status="active" AND start_time <= NOW() AND end_time >= NOW() ORDER BY end_time ASC')->fetchAll();
+    $monthlyRows = $pdo->query('SELECT DATE_FORMAT(created_at, "%b") AS month_label, COALESCE(SUM(total_amount),0) AS revenue FROM orders WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH) AND status != "cancelled" GROUP BY YEAR(created_at), MONTH(created_at), month_label ORDER BY MIN(created_at)')->fetchAll();
     ok([
         'stats' => [
             'totalOrders' => $totalOrders,
@@ -31,8 +34,10 @@ if ($action === 'dashboard' || $action === 'analytics') {
         'lowStock' => $lowStock,
         'recentOrders' => $recentOrders,
         'categoryPerformance' => $categoryRows,
+        'activeFlashSales' => $activeFlash,
+        'monthlyRevenue' => array_map(fn($r) => (float)$r['revenue'], $monthlyRows),
+        'monthlyLabels' => array_map(fn($r) => $r['month_label'], $monthlyRows),
         'weeklySales' => [12000, 19000, 15000, 22000, 28000, 32000, 24000],
-        'monthlyRevenue' => [145000, 165000, 190000, 177000, 215000, 245000],
         'customerAcquisition' => [
             'new' => [45, 52, 61, 58, 67, 74],
             'returning' => [75, 91, 103, 95, 122, 137]

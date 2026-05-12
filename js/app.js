@@ -2233,3 +2233,749 @@ if (document.readyState === 'loading') {
 } else {
   initApp();
 }
+
+// ========================================
+// BACKEND COMPLETENESS PATCH
+// Fixes admin flash sales, order details, product CRUD, settings persistence, and message sending.
+// ========================================
+
+var FLASH_SALES_DATA = [];
+var ADMIN_SETTINGS_CACHE = {};
+
+async function refreshFlashSalesFromServer() {
+  const response = await apiFetch('flash_sales.php?action=list');
+  FLASH_SALES_DATA = Array.isArray(response.flashSales) ? response.flashSales : [];
+  return FLASH_SALES_DATA;
+}
+
+async function refreshSettingsFromServer() {
+  if (!APP_STATE.isLoggedIn || APP_STATE.userRole !== 'admin') return ADMIN_SETTINGS_CACHE;
+  const response = await apiFetch('settings.php?action=get');
+  ADMIN_SETTINGS_CACHE = response.settings || {};
+  return ADMIN_SETTINGS_CACHE;
+}
+
+async function refreshProductsFromServer() {
+  const productsResponse = await apiFetch('products.php?action=list');
+  if (Array.isArray(productsResponse.products) && productsResponse.products.length) {
+    PRODUCTS_DATA = productsResponse.products;
+    normalizeProductIds();
+  }
+}
+
+async function loadServerState() {
+  try { await refreshProductsFromServer(); } catch (error) { console.warn('Products API fallback:', error.message); normalizeProductIds(); }
+  try { await refreshFlashSalesFromServer(); } catch (error) { console.warn('Flash sales API fallback:', error.message); }
+
+  try {
+    const authResponse = await apiFetch('auth.php?action=me');
+    if (authResponse.user) {
+      APP_STATE.isLoggedIn = true;
+      APP_STATE.userRole = authResponse.user.role;
+      APP_STATE.currentUser = authResponse.user;
+    }
+  } catch (error) {
+    console.warn('Auth API unavailable:', error.message);
+  }
+
+  try {
+    const cartResponse = await apiFetch('cart.php?action=list');
+    if (Array.isArray(cartResponse.cart)) APP_STATE.cart = cartResponse.cart;
+  } catch (error) {
+    console.warn('Cart API fallback:', error.message);
+  }
+
+  if (APP_STATE.isLoggedIn) {
+    if (APP_STATE.userRole === 'admin') APP_STATE.orders = [];
+    try {
+      const wishlistResponse = await apiFetch('wishlist.php?action=list');
+      if (Array.isArray(wishlistResponse.wishlist)) APP_STATE.wishlist = wishlistResponse.wishlist.map(String);
+    } catch (error) {
+      if (APP_STATE.userRole !== 'admin') console.warn('Wishlist API fallback:', error.message);
+    }
+    try { await refreshOrdersFromServer(APP_STATE.userRole === 'admin'); } catch (error) { console.warn('Orders API fallback:', error.message); }
+    if (APP_STATE.userRole === 'admin') {
+      try { await refreshAdminMessagesFromServer(); } catch (error) { console.warn('Messages API fallback:', error.message); }
+      try { await refreshSettingsFromServer(); } catch (error) { console.warn('Settings API fallback:', error.message); }
+    }
+  }
+}
+
+function htmlDateTimeLocal(value) {
+  if (!value) return '';
+  const d = new Date(String(value).replace(' ', 'T'));
+  if (Number.isNaN(d.getTime())) return '';
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+function adminModal(id, title, subtitle, body, maxWidth = '46rem') {
+  closeAdminModal();
+  const modal = document.createElement('div');
+  modal.className = 'admin-modal-overlay';
+  modal.id = id;
+  modal.innerHTML = `
+    <div class="admin-modal-card admin-wide-modal" style="max-width:${maxWidth}">
+      <button class="admin-modal-close" type="button" onclick="closeAdminModal()">×</button>
+      <h2>${escapeHTML(title)}</h2>
+      ${subtitle ? `<p>${escapeHTML(subtitle)}</p>` : ''}
+      ${body}
+    </div>
+  `;
+  document.body.appendChild(modal);
+  return modal;
+}
+
+function closeAdminModal() {
+  $$('.admin-modal-overlay').forEach(modal => modal.remove());
+}
+
+function renderAdminProductRows() {
+  const tbody = $('#admin-products-tbody');
+  const count = $('#admin-products-count');
+  if (!tbody) return;
+  const query = ($('#admin-product-search')?.value || '').toLowerCase().trim();
+  const category = $('#admin-product-category')?.value || 'all';
+  const filtered = PRODUCTS_DATA.filter(product => {
+    const matchesQuery = !query || product.name.toLowerCase().includes(query) || product.category.toLowerCase().includes(query);
+    const matchesCategory = category === 'all' || product.category === category;
+    return matchesQuery && matchesCategory;
+  });
+  if (count) count.textContent = `Showing ${filtered.length} products`;
+
+  tbody.innerHTML = filtered.map(product => `
+    <tr>
+      <td>
+        <div class="admin-product-cell">
+          <img src="${product.image}" alt="${escapeHTML(product.name)}">
+          <div><strong>${escapeHTML(product.name)}</strong>${product.isFlashSale ? '<span class="admin-mini-badge orange">Flash Sale</span>' : ''}</div>
+        </div>
+      </td>
+      <td>${escapeHTML(product.category)}</td>
+      <td><strong>${formatPrice(product.price)}</strong>${product.oldPrice ? `<span class="admin-old-price">${formatPrice(product.oldPrice)}</span>` : ''}</td>
+      <td><strong>${product.stock}</strong>${product.stock < 20 ? '<span class="admin-mini-badge red">Low</span>' : ''}</td>
+      <td><span class="status-${product.status === 'inactive' ? 'inactive' : 'active'}">${product.status === 'inactive' ? 'Inactive' : 'In Stock'}</span></td>
+      <td>
+        <button class="admin-icon-btn" title="Edit" onclick="openProductModal('${product.id}')">✎</button>
+        <button class="admin-icon-btn" title="Delete" onclick="deleteAdminProduct('${product.id}')">🗑</button>
+      </td>
+    </tr>
+  `).join('') || '<tr><td colspan="6" class="muted">No products found.</td></tr>';
+}
+
+function renderAdminProducts() {
+  const page = $('#admin-products-page');
+  if (!page) return;
+  const categories = ['all', ...new Set(PRODUCTS_DATA.map(product => product.category))];
+  page.innerHTML = adminShell('Product Management', 'Manage your product inventory', `
+    <section class="admin-card admin-toolbar-card">
+      <div class="admin-search-field"><span>⌕</span><input id="admin-product-search" type="search" placeholder="Search products..." oninput="renderAdminProductRows()"></div>
+      <select id="admin-product-category" onchange="renderAdminProductRows()">${categories.map(cat => `<option value="${escapeHTML(cat)}">${cat === 'all' ? 'All Categories' : escapeHTML(cat)}</option>`).join('')}</select>
+      <p id="admin-products-count">Showing ${PRODUCTS_DATA.length} products</p>
+    </section>
+    <section class="admin-table-shell">
+      <table class="admin-table admin-management-table">
+        <thead><tr><th>Product</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody id="admin-products-tbody"></tbody>
+      </table>
+    </section>
+  `, `<button class="btn btn-primary admin-top-btn" onclick="openProductModal()">+ Add Product</button>`);
+  renderAdminProductRows();
+}
+
+function openProductModal(productId = null) {
+  const product = productId ? PRODUCTS_DATA.find(p => p.id === String(productId)) : null;
+  const categories = [...new Set(PRODUCTS_DATA.map(p => p.category))];
+  const body = `
+    <form id="admin-product-form" onsubmit="saveAdminProduct(event, ${product ? `'${product.id}'` : 'null'})">
+      <div class="form-grid">
+        <div class="form-group"><label>Product Name *</label><input name="name" value="${escapeHTML(product?.name || '')}" required></div>
+        <div class="form-group"><label>Category *</label><input name="category" list="admin-category-list" value="${escapeHTML(product?.category || '')}" required><datalist id="admin-category-list">${categories.map(c => `<option value="${escapeHTML(c)}"></option>`).join('')}</datalist></div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>Price (৳) *</label><input name="price" type="number" min="1" step="0.01" value="${product?.basePrice || product?.price || ''}" required></div>
+        <div class="form-group"><label>Old Price (৳)</label><input name="oldPrice" type="number" min="0" step="0.01" value="${product?.oldPrice || ''}"></div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>Discount (%)</label><input name="discount" type="number" min="0" max="90" value="${product?.discount || 0}"></div>
+        <div class="form-group"><label>Stock *</label><input name="stock" type="number" min="0" value="${product?.stock ?? 0}" required></div>
+      </div>
+      <div class="form-group"><label>Image URL</label><input name="image" value="${escapeHTML(product?.image || '')}" placeholder="https://..."></div>
+      <div class="form-group"><label>Description</label><textarea name="description" rows="3">${escapeHTML(product?.description || '')}</textarea></div>
+      <div class="form-group"><label>Specifications</label><textarea name="specs" rows="3" placeholder="One spec per line">${escapeHTML((product?.specs || []).join('\n'))}</textarea></div>
+      <div class="form-grid">
+        <div class="form-group"><label>Rating</label><input name="rating" type="number" min="0" max="5" step="0.1" value="${product?.rating || 4.5}"></div>
+        <div class="form-group"><label>Status</label><select name="status"><option value="active" ${product?.status !== 'inactive' ? 'selected' : ''}>Active</option><option value="inactive" ${product?.status === 'inactive' ? 'selected' : ''}>Inactive</option></select></div>
+      </div>
+      <div class="admin-modal-actions"><button type="button" class="btn btn-outline" onclick="closeAdminModal()">Cancel</button><button class="btn btn-primary" type="submit">${product ? 'Save Product' : 'Create Product'}</button></div>
+    </form>
+  `;
+  adminModal('admin-product-modal', product ? 'Edit Product' : 'Add Product', product ? 'Update product information and inventory.' : 'Create a new product for your store.', body, '48rem');
+}
+
+async function saveAdminProduct(event, productId = null) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const payload = {
+    name: form.elements.name.value.trim(),
+    category: form.elements.category.value.trim(),
+    price: Number(form.elements.price.value),
+    oldPrice: Number(form.elements.oldPrice.value || 0),
+    discount: Number(form.elements.discount.value || 0),
+    stock: Number(form.elements.stock.value || 0),
+    image: form.elements.image.value.trim(),
+    description: form.elements.description.value.trim(),
+    specs: form.elements.specs.value.split('\n').map(s => s.trim()).filter(Boolean),
+    rating: Number(form.elements.rating.value || 4.5),
+    status: form.elements.status.value
+  };
+  if (productId) payload.id = productId;
+  try {
+    await apiFetch(`products.php?action=${productId ? 'update' : 'create'}`, payload);
+    await refreshProductsFromServer();
+    closeAdminModal();
+    renderAdminProducts();
+    showToast(productId ? 'Product updated.' : 'Product created.');
+  } catch (error) {
+    showToast(error.message || 'Unable to save product.', 'error');
+  }
+}
+
+async function deleteAdminProduct(productId) {
+  const product = PRODUCTS_DATA.find(p => p.id === String(productId));
+  if (!confirm(`Delete ${product?.name || 'this product'}? This hides it from the store.`)) return;
+  try {
+    await apiFetch('products.php?action=delete', { id: productId });
+    await refreshProductsFromServer();
+    renderAdminProducts();
+    showToast('Product deleted.');
+  } catch (error) {
+    showToast(error.message || 'Unable to delete product.', 'error');
+  }
+}
+
+function renderAdminOrderRows() {
+  const tbody = $('#admin-orders-tbody');
+  const count = $('#admin-orders-count');
+  if (!tbody) return;
+  const query = ($('#admin-order-search')?.value || '').toLowerCase().trim();
+  const status = $('#admin-order-status')?.value || 'all';
+  const filtered = allOrders().filter(order => {
+    const customer = order.customer || {};
+    const matchesQuery = !query || String(order.id).toLowerCase().includes(query) || (customer.name || '').toLowerCase().includes(query) || (customer.phone || '').toLowerCase().includes(query) || (customer.email || '').toLowerCase().includes(query);
+    const matchesStatus = status === 'all' || order.status === status;
+    return matchesQuery && matchesStatus;
+  });
+  if (count) count.textContent = `Showing ${filtered.length} orders`;
+
+  tbody.innerHTML = filtered.map(order => `
+    <tr>
+      <td><strong>${escapeHTML(order.id)}</strong></td>
+      <td><strong>${escapeHTML(order.customer?.name || 'Customer')}</strong><span>${escapeHTML(order.customer?.phone || order.customer?.email || '')}</span></td>
+      <td>${formatDate(order.date)}</td>
+      <td><strong>${formatPrice(order.total)}</strong></td>
+      <td><span class="admin-mini-badge yellow">${escapeHTML(order.paymentMethod || 'COD')}</span><span>${escapeHTML(order.paymentStatus || 'pending')}</span></td>
+      <td><span class="status-${order.status}">${escapeHTML(order.status)}</span></td>
+      <td><button class="admin-icon-btn" title="View order" onclick="openAdminOrderDetails('${order.dbId || order.id}')">👁</button></td>
+    </tr>
+  `).join('') || '<tr><td colspan="7" class="muted">No orders found.</td></tr>';
+}
+
+async function openAdminOrderDetails(identifier) {
+  adminModal('admin-order-modal', 'Order Details', 'Loading order information...', '<div class="admin-loading">Loading...</div>', '58rem');
+  try {
+    const response = await apiFetch(`orders.php?action=get&id=${encodeURIComponent(identifier)}`);
+    renderOrderDetailModal(response.order);
+  } catch (error) {
+    adminModal('admin-order-modal', 'Order Details', '', `<div class="admin-error-box">${escapeHTML(error.message || 'Unable to load order.')}</div>`, '48rem');
+  }
+}
+
+function renderOrderDetailModal(order) {
+  const items = order.items || [];
+  const statusOptions = ['pending','confirmed','packed','shipped','delivered','cancelled'];
+  const body = `
+    <div class="admin-order-detail-grid">
+      <section class="admin-detail-card">
+        <h3>Customer</h3>
+        <p><strong>${escapeHTML(order.customer?.name || '')}</strong></p>
+        <p>${escapeHTML(order.customer?.email || '')}</p>
+        <p>${escapeHTML(order.customer?.phone || '')}</p>
+      </section>
+      <section class="admin-detail-card">
+        <h3>Shipping Address</h3>
+        <p>${escapeHTML(order.customer?.address || '')}</p>
+        <p>${escapeHTML(order.customer?.city || '')}</p>
+      </section>
+      <section class="admin-detail-card">
+        <h3>Payment</h3>
+        <p><strong>${escapeHTML(order.paymentMethod || 'COD')}</strong></p>
+        <p>Status: <span class="status-${order.paymentStatus === 'paid' ? 'delivered' : 'pending'}">${escapeHTML(order.paymentStatus || 'pending')}</span></p>
+      </section>
+      <section class="admin-detail-card">
+        <h3>Order Status</h3>
+        <select class="admin-status-select" onchange="updateAdminOrderStatus('${order.dbId || order.id}', this.value)">
+          ${statusOptions.map(status => `<option value="${status}" ${order.status === status ? 'selected' : ''}>${status[0].toUpperCase() + status.slice(1)}</option>`).join('')}
+        </select>
+      </section>
+    </div>
+    <section class="admin-detail-card admin-detail-wide">
+      <h3>Items in ${escapeHTML(order.id)}</h3>
+      <div class="admin-order-items">
+        ${items.map(item => `
+          <div class="admin-order-item-row">
+            <img src="${item.image || 'assets/haathub-logo.png'}" alt="${escapeHTML(item.name)}">
+            <div><strong>${escapeHTML(item.name)}</strong><span>Qty: ${item.quantity} × ${formatPrice(item.price)}</span></div>
+            <b>${formatPrice(item.total || item.price * item.quantity)}</b>
+          </div>
+        `).join('') || '<p class="muted">No order items found.</p>'}
+      </div>
+    </section>
+    <section class="admin-detail-summary">
+      <div><span>Subtotal</span><strong>${formatPrice(order.subtotal)}</strong></div>
+      <div><span>Delivery</span><strong>${Number(order.deliveryFee || 0) === 0 ? 'FREE' : formatPrice(order.deliveryFee)}</strong></div>
+      <div class="total"><span>Total</span><strong>${formatPrice(order.total)}</strong></div>
+    </section>
+    <section class="admin-detail-card admin-detail-wide">
+      <h3>Timeline & Notes</h3>
+      <p>Created: ${formatDate(order.date)}</p>
+      ${order.updatedAt ? `<p>Last Updated: ${formatDate(order.updatedAt)}</p>` : ''}
+      ${order.deliveryDate ? `<p>Delivered: ${formatDate(order.deliveryDate)}</p>` : ''}
+      ${order.notes ? `<p><strong>Note:</strong> ${escapeHTML(order.notes)}</p>` : '<p class="muted">No customer notes.</p>'}
+    </section>
+    <div class="admin-modal-actions"><button class="btn btn-outline" onclick="closeAdminModal()">Close</button></div>
+  `;
+  adminModal('admin-order-modal', `Order ${order.id}`, 'Complete customer, payment, item and delivery information.', body, '60rem');
+}
+
+async function updateAdminOrderStatus(identifier, status) {
+  try {
+    await apiFetch('orders.php?action=update_status', { id: identifier, status });
+    await refreshOrdersFromServer(true);
+    renderAdminOrders();
+    await openAdminOrderDetails(identifier);
+    showToast('Order status updated.');
+  } catch (error) {
+    showToast(error.message || 'Unable to update order status.', 'error');
+  }
+}
+
+function flashStatusClass(status) {
+  if (status === 'active') return 'active';
+  if (status === 'scheduled') return 'scheduled';
+  if (status === 'paused') return 'paused';
+  return 'ended';
+}
+
+function renderFlashSaleProducts(products = []) {
+  return `
+    <div class="admin-sale-products-list">
+      ${products.slice(0, 5).map(product => `<span><img src="${product.image}" alt="${escapeHTML(product.name)}">${escapeHTML(product.name)} <b>${formatPrice(product.price)}</b></span>`).join('') || '<em class="muted">No products attached.</em>'}
+      ${products.length > 5 ? `<em>+${products.length - 5} more</em>` : ''}
+    </div>
+  `;
+}
+
+function renderAdminFlashSales() {
+  const page = $('#admin-flash-sales-page');
+  if (!page) return;
+  const sales = FLASH_SALES_DATA.length ? FLASH_SALES_DATA : [];
+  page.innerHTML = adminShell('Flash Sales Management', 'Create and manage flash sales campaigns', `
+    <div class="admin-campaign-list">
+      ${sales.map(sale => `
+        <section class="admin-campaign-card ${flashStatusClass(sale.status)}">
+          <div class="admin-campaign-head">
+            <div><h2>${adminIcon('flash')} ${escapeHTML(sale.name)} <span>${escapeHTML(sale.status)}</span></h2><p>📅 ${formatDate(sale.startTime)} - ${formatDate(sale.endTime)} &nbsp;&nbsp; ◷ ${htmlDateTimeLocal(sale.startTime).slice(11) || '--:--'} - ${htmlDateTimeLocal(sale.endTime).slice(11) || '--:--'}</p></div>
+            <div class="admin-campaign-discount"><strong>${sale.discount}%</strong><span>Discount</span></div>
+            <div class="admin-campaign-actions">
+              <button class="admin-icon-btn" title="${sale.status === 'active' ? 'Pause' : 'Activate'}" onclick="toggleFlashSaleStatus(${sale.id}, '${sale.status}')">${sale.status === 'active' ? 'Ⅱ' : '▶'}</button>
+              <button class="admin-icon-btn" title="Edit" onclick="openFlashSaleModal(${sale.id})">✎</button>
+              <button class="admin-icon-btn" title="Delete" onclick="deleteFlashSale(${sale.id})">🗑</button>
+            </div>
+          </div>
+          <div class="admin-campaign-body"><div><h3>Products in Sale (${sale.products?.length || 0})</h3>${renderFlashSaleProducts(sale.products || [])}</div><button class="btn btn-outline" onclick="openFlashSaleModal(${sale.id})">Edit Products</button></div>
+        </section>
+      `).join('') || `<section class="admin-card"><h2>No flash sales yet</h2><p class="muted">Create your first campaign to show flash-sale pricing on the storefront.</p></section>`}
+    </div>
+  `, `<button class="btn btn-primary admin-orange-btn" onclick="openFlashSaleModal()">⚡ Create Flash Sale</button>`);
+}
+
+function openFlashSaleModal(saleId = null) {
+  const sale = saleId ? FLASH_SALES_DATA.find(item => Number(item.id) === Number(saleId)) : null;
+  ADMIN_SELECTED_FLASH_PRODUCTS = new Set((sale?.products || []).map(product => String(product.id)));
+  const body = `
+    <form id="admin-flash-form" onsubmit="createFlashSale(event, ${sale ? sale.id : 'null'})">
+      <div class="form-grid">
+        <div class="form-group"><label>Sale Name *</label><input name="name" required placeholder="e.g., Weekend Mega Sale" value="${escapeHTML(sale?.name || '')}"></div>
+        <div class="form-group"><label>Discount (%) *</label><input name="discount" type="number" min="1" max="90" value="${sale?.discount || 20}" required></div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group"><label>Start Date & Time *</label><input name="startTime" type="datetime-local" value="${htmlDateTimeLocal(sale?.startTime) || htmlDateTimeLocal(new Date())}" required></div>
+        <div class="form-group"><label>End Date & Time *</label><input name="endTime" type="datetime-local" value="${htmlDateTimeLocal(sale?.endTime) || htmlDateTimeLocal(new Date(Date.now() + 2 * 86400000))}" required></div>
+      </div>
+      <label class="admin-modal-label">Select Products for Flash Sale</label>
+      <div class="admin-product-picker">
+        ${PRODUCTS_DATA.map(product => `
+          <button type="button" class="admin-picker-row ${ADMIN_SELECTED_FLASH_PRODUCTS.has(product.id) ? 'selected' : ''}" data-picker-product="${product.id}" onclick="toggleAdminProductSelection('${product.id}')">
+            <span class="admin-toggle"><i></i></span>
+            <span><strong>${escapeHTML(product.name)}</strong><small>${formatPrice(product.basePrice || product.price)}</small></span>
+            <em>${escapeHTML(product.category)}</em>
+          </button>
+        `).join('')}
+      </div>
+      <p class="muted"><span id="admin-selected-count">${ADMIN_SELECTED_FLASH_PRODUCTS.size}</span> products selected</p>
+      <div class="admin-modal-actions"><button type="button" class="btn btn-outline" onclick="closeAdminModal()">Cancel</button><button class="btn btn-primary" type="submit">${sale ? 'Update Flash Sale' : 'Create Flash Sale'}</button></div>
+    </form>
+  `;
+  adminModal('admin-flash-modal', sale ? 'Edit Flash Sale' : 'Create New Flash Sale', 'Schedule a flash sale and select products to include.', body, '44rem');
+}
+
+function toggleAdminProductSelection(productId) {
+  productId = String(productId);
+  const row = document.querySelector(`[data-picker-product="${productId}"]`);
+  if (ADMIN_SELECTED_FLASH_PRODUCTS.has(productId)) {
+    ADMIN_SELECTED_FLASH_PRODUCTS.delete(productId);
+    row?.classList.remove('selected');
+  } else {
+    ADMIN_SELECTED_FLASH_PRODUCTS.add(productId);
+    row?.classList.add('selected');
+  }
+  const count = $('#admin-selected-count');
+  if (count) count.textContent = ADMIN_SELECTED_FLASH_PRODUCTS.size;
+}
+
+async function createFlashSale(event, saleId = null) {
+  event.preventDefault();
+  if (ADMIN_SELECTED_FLASH_PRODUCTS.size === 0) {
+    showToast('Select at least one product for the flash sale.', 'error');
+    return;
+  }
+  const form = event.currentTarget;
+  const payload = {
+    name: form.elements.name.value.trim(),
+    discount: Number(form.elements.discount.value),
+    startTime: form.elements.startTime.value,
+    endTime: form.elements.endTime.value,
+    productIds: Array.from(ADMIN_SELECTED_FLASH_PRODUCTS)
+  };
+  if (saleId) payload.id = saleId;
+  try {
+    await apiFetch(`flash_sales.php?action=${saleId ? 'update' : 'create'}`, payload);
+    await refreshFlashSalesFromServer();
+    await refreshProductsFromServer();
+    closeAdminModal();
+    renderAdminFlashSales();
+    showToast(saleId ? 'Flash sale updated.' : 'Flash sale created.');
+  } catch (error) {
+    showToast(error.message || 'Unable to save flash sale.', 'error');
+  }
+}
+
+async function toggleFlashSaleStatus(saleId, currentStatus) {
+  const status = currentStatus === 'active' ? 'paused' : 'active';
+  try {
+    await apiFetch('flash_sales.php?action=toggle', { id: saleId, status });
+    await refreshFlashSalesFromServer();
+    await refreshProductsFromServer();
+    renderAdminFlashSales();
+    showToast(`Flash sale ${status === 'active' ? 'activated' : 'paused'}.`);
+  } catch (error) {
+    showToast(error.message || 'Unable to update flash sale.', 'error');
+  }
+}
+
+async function deleteFlashSale(saleId) {
+  if (!confirm('Delete this flash sale campaign?')) return;
+  try {
+    await apiFetch('flash_sales.php?action=delete', { id: saleId });
+    await refreshFlashSalesFromServer();
+    await refreshProductsFromServer();
+    renderAdminFlashSales();
+    showToast('Flash sale deleted.');
+  } catch (error) {
+    showToast(error.message || 'Unable to delete flash sale.', 'error');
+  }
+}
+
+async function renderAdminMessages(selectedId = null) {
+  const page = $('#admin-messages-page');
+  if (!page) return;
+  if (!ADMIN_INBOX_CACHE) {
+    try { await refreshAdminMessagesFromServer(); } catch (error) { console.warn(error.message); }
+  }
+  const threads = getAdminInbox();
+  let selected = threads.find(thread => Number(thread.id) === Number(selectedId)) || threads[0];
+  if (selected) {
+    try {
+      const response = await apiFetch(`messages.php?action=thread&id=${encodeURIComponent(selected.id)}`);
+      if (response.conversation) {
+        selected.messages = (response.conversation.messages || []).map(message => ({
+          sender: message.sender === 'customer' ? 'customer' : 'admin',
+          text: message.text,
+          time: message.timestamp ? new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''
+        }));
+        selected.unread = false;
+      }
+    } catch (error) { console.warn('Thread API fallback:', error.message); }
+  }
+
+  page.innerHTML = adminShell('Customer Messages', 'Chat with your customers', `
+    <div class="admin-messenger-card">
+      <aside class="admin-conversation-list">
+        <div class="admin-search-field compact"><span>⌕</span><input type="search" placeholder="Search conversations..."></div>
+        <div class="admin-thread-list">
+          ${threads.map(thread => `
+            <button class="admin-thread-item ${selected && thread.id === selected.id ? 'active' : ''}" onclick="renderAdminMessages(${thread.id})">
+              <span class="admin-avatar">${escapeHTML((thread.customer.name || 'C').split(' ').map(part => part[0]).join('').slice(0,2))}</span>
+              <span><strong>${escapeHTML(thread.customer.name || 'Customer')}</strong><small>${escapeHTML(thread.time || '')}</small><em>${escapeHTML(thread.messages?.[thread.messages.length - 1]?.text || thread.preview || '')}</em><b>${escapeHTML(thread.orderId || '')}</b></span>
+              ${thread.unread ? '<i>New</i>' : ''}
+            </button>
+          `).join('')}
+        </div>
+      </aside>
+      <section class="admin-chat-pane">
+        ${selected ? `
+          <header>
+            <span class="admin-avatar large">${escapeHTML((selected.customer.name || 'C').split(' ').map(part => part[0]).join('').slice(0,2))}</span>
+            <div><h2>${escapeHTML(selected.customer.name || 'Customer')}</h2><p>${escapeHTML(selected.orderId || '')}</p></div>
+          </header>
+          <div class="admin-chat-history" id="admin-chat-history">
+            ${(selected.messages || []).map(message => `
+              <div class="admin-chat-bubble ${message.sender === 'admin' ? 'admin-reply' : 'customer-reply'}">
+                <p>${escapeHTML(message.text)}</p><span>${escapeHTML(message.time || '')}</span>
+              </div>
+            `).join('')}
+          </div>
+          <div class="admin-chat-input">
+            <input id="admin-reply-input" type="text" placeholder="Type your message..." onkeydown="if(event.key==='Enter'){sendAdminReply(${selected.id})}">
+            <button class="btn btn-primary btn-icon" onclick="sendAdminReply(${selected.id})">✈</button>
+          </div>` : '<div class="admin-empty-state">No conversations found.</div>'}
+      </section>
+    </div>
+  `);
+  const chat = $('#admin-chat-history');
+  if (chat) chat.scrollTop = chat.scrollHeight;
+}
+
+async function sendAdminReply(threadId) {
+  const input = $('#admin-reply-input');
+  const text = input?.value.trim();
+  if (!input || !text) return;
+  input.value = '';
+  try {
+    await apiFetch('messages.php?action=send', { conversation_id: threadId, message: text });
+    await refreshAdminMessagesFromServer();
+    await renderAdminMessages(threadId);
+    showToast('Reply sent.');
+  } catch (error) {
+    const thread = getAdminInbox().find(item => Number(item.id) === Number(threadId));
+    if (thread) thread.messages.push({ sender: 'admin', text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+    renderAdminMessages(threadId);
+    showToast(error.message || 'Reply saved locally only.', 'info');
+  }
+}
+
+function settingValue(key, fallback = '') {
+  return ADMIN_SETTINGS_CACHE[key] ?? fallback;
+}
+
+function checkedAttr(key, fallback = false) {
+  return settingValue(key, fallback) ? 'checked' : '';
+}
+
+function renderAdminSettings(activeTab = 'store') {
+  const page = $('#admin-settings-page');
+  if (!page) return;
+  const tabs = `
+    <div class="admin-settings-tabs">
+      ${adminSettingsTab('store', activeTab, 'Store', '🏬')}
+      ${adminSettingsTab('notifications', activeTab, 'Notifications', '🔔')}
+      ${adminSettingsTab('payment', activeTab, 'Payment', '$')}
+      ${adminSettingsTab('shipping', activeTab, 'Shipping', '🚚')}
+      ${adminSettingsTab('security', activeTab, 'Security', '🛡')}
+    </div>
+  `;
+  const content = {
+    store: `
+      <form class="admin-settings-card" onsubmit="saveAdminSettings(event, 'store')">
+        <h2>${adminIcon('settings')} Store Information</h2>
+        <div class="admin-settings-body">
+          <div class="form-grid"><div class="form-group"><label>Store Name</label><input name="store_name" value="${escapeHTML(settingValue('store_name', 'HaatHub'))}"></div><div class="form-group"><label>Store Email</label><input name="store_email" value="${escapeHTML(settingValue('store_email', 'admin@haathub.com'))}"></div></div>
+          <div class="form-grid"><div class="form-group"><label>Store Phone</label><input name="store_phone" value="${escapeHTML(settingValue('store_phone', '+880 1711-123456'))}"></div><div class="form-group"><label>Currency</label><select name="currency"><option value="BDT" selected>BDT (৳)</option></select></div></div>
+          <div class="form-group"><label>Store Address</label><input name="store_address" value="${escapeHTML(settingValue('store_address', '123 Digital Bazar, Dhaka 1212, Bangladesh'))}"></div>
+          <div class="form-group"><label>Store Description</label><textarea name="store_description" rows="3">${escapeHTML(settingValue('store_description', "Your Digital হাট - Bangladesh's premier online marketplace"))}</textarea></div>
+          <div class="form-grid"><div class="form-group"><label>Products Per Page</label><input type="number" name="products_per_page" value="${escapeHTML(settingValue('products_per_page', 12))}"></div><div class="form-group"><label>Time Zone</label><input name="timezone" value="${escapeHTML(settingValue('timezone', 'Asia/Dhaka'))}"></div></div>
+          <button class="btn btn-primary admin-save-btn">▣ Save Changes</button>
+        </div>
+      </form>`,
+    notifications: `
+      <form class="admin-settings-card" onsubmit="saveAdminSettings(event, 'notifications')">
+        <h2>🔔 Notification Preferences</h2>
+        <div class="admin-settings-body admin-switch-list admin-real-switches">
+          ${[
+            ['notification_email_orders','New order alerts','Send immediate email notification'],
+            ['notification_sms_orders','SMS order alerts','Send SMS notification'],
+            ['notification_low_stock','Low stock alerts','Notify when stock is low'],
+            ['notification_messages','Customer message alerts','Notify for new messages'],
+            ['notification_daily_summary','Daily sales summary','Send scheduled summary']
+          ].map(([key, title, desc]) => `<label><span><strong>${title}</strong><small>${desc}</small></span><input type="checkbox" name="${key}" ${checkedAttr(key, key !== 'notification_sms_orders')}></label>`).join('')}
+          <button class="btn btn-primary admin-save-btn">▣ Save Changes</button>
+        </div>
+      </form>`,
+    payment: `
+      <form class="admin-settings-card" onsubmit="saveAdminSettings(event, 'payment')">
+        <h2>$ Payment Methods</h2>
+        <div class="admin-settings-body admin-switch-list admin-real-switches">
+          ${[
+            ['payment_cod','Cash on Delivery (COD)','Allow customers to pay on delivery'],
+            ['payment_bkash','bKash Payment','Enable bKash mobile wallet payments'],
+            ['payment_nagad','Nagad Payment','Enable Nagad mobile wallet payments'],
+            ['payment_sslcommerz','SSLCommerz Gateway','Enable SSLCommerz payment gateway']
+          ].map(([key, title, desc]) => `<label><span><strong>${title}</strong><small>${desc}</small></span><input type="checkbox" name="${key}" ${checkedAttr(key, key === 'payment_cod' || key === 'payment_bkash')}></label>`).join('')}
+          <button class="btn btn-primary admin-save-btn">▣ Save Changes</button>
+        </div>
+      </form>`,
+    shipping: `
+      <form class="admin-settings-card" onsubmit="saveAdminSettings(event, 'shipping')">
+        <h2>🚚 Shipping Configuration</h2>
+        <div class="admin-settings-body">
+          <div class="form-grid"><div class="form-group"><label>Standard Shipping Cost (৳)</label><input type="number" name="standard_shipping_cost" value="${escapeHTML(settingValue('standard_shipping_cost', 60))}"><small>Delivery in 5-7 business days</small></div><div class="form-group"><label>Express Shipping Cost (৳)</label><input type="number" name="express_shipping_cost" value="${escapeHTML(settingValue('express_shipping_cost', 120))}"><small>Delivery in 2-3 business days</small></div></div>
+          <div class="form-group"><label>Free Shipping Threshold (৳)</label><input type="number" name="free_shipping_threshold" value="${escapeHTML(settingValue('free_shipping_threshold', 1500))}"><small>Orders above this amount get free shipping</small></div>
+          <div class="admin-info-box"><strong>Current Setup:</strong> Free shipping on orders ৳${escapeHTML(settingValue('free_shipping_threshold', 1500))}+, otherwise ৳${escapeHTML(settingValue('standard_shipping_cost', 60))} standard or ৳${escapeHTML(settingValue('express_shipping_cost', 120))} express.</div>
+          <button class="btn btn-primary admin-save-btn">▣ Save Changes</button>
+        </div>
+      </form>`,
+    security: `
+      <form class="admin-settings-card" onsubmit="saveAdminSettings(event, 'security')">
+        <h2>🛡 Security & Privacy</h2>
+        <div class="admin-settings-body admin-switch-list admin-real-switches">
+          <label><span><strong>Two-Factor Authentication</strong><small>Add an extra layer of security to your account</small></span><input type="checkbox" name="security_two_factor" ${checkedAttr('security_two_factor', false)}></label>
+          <div class="form-group"><label>Session Timeout (minutes)</label><input type="number" name="security_session_timeout" value="${escapeHTML(settingValue('security_session_timeout', 30))}"><small>Auto-logout after inactivity</small></div>
+          <button class="btn btn-primary admin-save-btn">▣ Save Changes</button>
+        </div>
+      </form>`
+  };
+  page.innerHTML = adminShell('Settings', 'Manage your store configuration and preferences', `${tabs}${content[activeTab] || content.store}`);
+}
+
+async function saveAdminSettings(event, tab) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const settings = {};
+  Array.from(form.elements).forEach(el => {
+    if (!el.name) return;
+    if (el.type === 'checkbox') settings[el.name] = el.checked;
+    else if (el.type === 'number') settings[el.name] = Number(el.value || 0);
+    else settings[el.name] = el.value;
+  });
+  try {
+    await apiFetch('settings.php?action=update', { settings });
+    await refreshSettingsFromServer();
+    renderAdminSettings(tab);
+    showToast('Settings saved.');
+  } catch (error) {
+    showToast(error.message || 'Unable to save settings.', 'error');
+  }
+}
+
+async function sendMessage() {
+  const input = $('#chat-input-field');
+  const text = input?.value.trim();
+  if (!input || !text) return;
+  appendChatMessage(text, 'user');
+  input.value = '';
+  if (APP_STATE.isLoggedIn && APP_STATE.userRole !== 'admin') {
+    try { await apiFetch('messages.php?action=send', { subject: 'Customer Support', message: text }); }
+    catch (error) { console.warn('Message API fallback:', error.message); }
+  }
+  setTimeout(() => appendChatMessage('Thank you for your message. Our support team will get back to you shortly.', 'admin'), 700);
+}
+
+window.renderAdminProductRows = renderAdminProductRows;
+window.renderAdminOrderRows = renderAdminOrderRows;
+window.openAdminOrderDetails = openAdminOrderDetails;
+window.updateAdminOrderStatus = updateAdminOrderStatus;
+window.openProductModal = openProductModal;
+window.saveAdminProduct = saveAdminProduct;
+window.deleteAdminProduct = deleteAdminProduct;
+window.openFlashSaleModal = openFlashSaleModal;
+window.closeAdminModal = closeAdminModal;
+window.toggleAdminProductSelection = toggleAdminProductSelection;
+window.createFlashSale = createFlashSale;
+window.toggleFlashSaleStatus = toggleFlashSaleStatus;
+window.deleteFlashSale = deleteFlashSale;
+window.renderAdminMessages = renderAdminMessages;
+window.sendAdminReply = sendAdminReply;
+window.renderAdminSettings = renderAdminSettings;
+window.saveAdminSettings = saveAdminSettings;
+window.sendMessage = sendMessage;
+
+function exportAdminReport() {
+  const rows = [
+    ['Metric', 'Value'],
+    ['Total Revenue', allOrders().reduce((sum, order) => sum + Number(order.total || 0), 0)],
+    ['Total Orders', allOrders().length],
+    ['Total Products', PRODUCTS_DATA.length],
+    ['Active Flash Sales', FLASH_SALES_DATA.filter(s => s.status === 'active').length],
+    [],
+    ['Order ID', 'Customer', 'Status', 'Payment', 'Total', 'Date'],
+    ...allOrders().map(order => [order.id, order.customer?.name || '', order.status, order.paymentMethod || '', order.total, formatDate(order.date)])
+  ];
+  const csv = rows.map(row => row.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `haathub-report-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  showToast('Report exported.');
+}
+
+function renderAdminAnalytics() {
+  const page = $('#admin-analytics-page');
+  if (!page) return;
+  const orders = allOrders();
+  const revenue = orders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const avgOrder = orders.length ? Math.round(revenue / orders.length) : 0;
+  const topProducts = [...PRODUCTS_DATA].sort((a, b) => b.reviews - a.reviews).slice(0, 4);
+  const categories = [...new Set(PRODUCTS_DATA.map(product => product.category))].slice(0, 5);
+  const categoryValues = categories.map(category => orders.reduce((sum, order) => {
+    const items = order.items || [];
+    return sum + items.reduce((inner, item) => {
+      const p = PRODUCTS_DATA.find(product => product.id === String(item.productId));
+      return inner + (p?.category === category ? Number(item.price || p.price || 0) * Number(item.quantity || 1) : 0);
+    }, 0);
+  }, 0) || Math.round(PRODUCTS_DATA.filter(p => p.category === category).reduce((sum, p) => sum + p.price * Math.max(1, Math.round(p.reviews / 100)), 0)));
+  const maxCategory = Math.max(...categoryValues, 1);
+
+  page.innerHTML = adminShell('Analytics & Insights', 'Track your business performance and growth', `
+    <div class="admin-stats-grid">
+      ${adminMetricCard('Total Revenue', formatPrice(revenue), '↗ Live from orders', 'teal', adminIcon('sales'))}
+      ${adminMetricCard('Total Orders', orders.length, '↗ Includes MySQL orders', 'blue', adminIcon('orders'))}
+      ${adminMetricCard('Avg Order Value', formatPrice(avgOrder), 'Calculated from totals', 'purple', adminIcon('package'))}
+      ${adminMetricCard('Conversion Rate', '3.2%', 'Store benchmark', 'cyan', adminIcon('trend'))}
+    </div>
+    <div class="admin-dashboard-grid">
+      <section class="admin-card admin-chart-card"><h2>${adminIcon('trend')} Revenue Trend</h2>${createAdminLineChart([145000, 165000, 192000, 178000, 215000, Math.max(248000, revenue)], ['Jan','Feb','Mar','Apr','May','Now'], { max: Math.max(260000, revenue) })}</section>
+      <section class="admin-card admin-chart-card"><h2>Customer Acquisition</h2>${createAdminBarChart([45, 55, 62, 59, 68, 75], [75, 92, 105, 96, 121, 138], ['Jan','Feb','Mar','Apr','May','Jun'])}<div class="admin-legend"><span><i class="legend-a"></i>New Customers</span><span><i class="legend-b"></i>Returning</span></div></section>
+    </div>
+    <div class="admin-dashboard-grid lower-grid">
+      <section class="admin-card"><h2>Category Performance</h2>
+        ${categories.map((category, index) => `
+          <div class="admin-progress-row"><div><strong>${escapeHTML(category)}</strong><b>${formatPrice(categoryValues[index])}</b><em>${index % 2 ? '↗ 8.3%' : '↗ 12.5%'}</em></div><span><i style="width:${Math.round((categoryValues[index]/maxCategory)*100)}%"></i></span></div>
+        `).join('')}
+      </section>
+      <section class="admin-card"><h2>Top Selling Products</h2>
+        <div class="admin-top-products">
+          ${topProducts.map((product, index) => `<div><span>#${index + 1}</span><strong>${escapeHTML(product.name)}</strong><small>${product.reviews} reviews</small><b>${formatPrice(product.price * Math.max(1, Math.round(product.reviews / 10)))}</b></div>`).join('')}
+        </div>
+      </section>
+    </div>
+  `, `<button class="btn btn-primary admin-top-btn" onclick="exportAdminReport()">⇩ Export Report</button>`);
+}
+
+window.exportAdminReport = exportAdminReport;
+window.renderAdminAnalytics = renderAdminAnalytics;

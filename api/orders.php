@@ -4,16 +4,17 @@ require_once __DIR__ . '/bootstrap.php';
 $action = action_name();
 $data = request_data();
 
-function order_to_array(array $row): array
+function order_to_array(array $row, bool $includeItems = false): array
 {
-    return [
+    $order = [
         'id' => $row['order_number'],
         'dbId' => (int)$row['id'],
         'customer' => [
             'name' => $row['customer_name'],
             'email' => $row['customer_email'],
             'phone' => $row['customer_phone'],
-            'address' => $row['shipping_address'] ?? ''
+            'address' => $row['shipping_address'] ?? '',
+            'city' => $row['city'] ?? ''
         ],
         'total' => (float)$row['total_amount'],
         'subtotal' => (float)$row['subtotal'],
@@ -22,21 +23,26 @@ function order_to_array(array $row): array
         'paymentMethod' => $row['payment_method'],
         'paymentStatus' => $row['payment_status'],
         'date' => $row['created_at'],
-        'deliveryDate' => $row['delivered_at'] ?? null
+        'updatedAt' => $row['updated_at'] ?? null,
+        'deliveryDate' => $row['delivered_at'] ?? null,
+        'notes' => $row['notes'] ?? ''
     ];
+    if ($includeItems) $order['items'] = read_order_items((int)$row['id']);
+    return $order;
 }
 
 function read_order_items(int $orderId): array
 {
-    $stmt = db()->prepare('SELECT oi.*, p.name, p.image_url FROM order_items oi LEFT JOIN products p ON p.id = oi.product_id WHERE oi.order_id = ?');
+    $stmt = db()->prepare('SELECT oi.*, p.name, p.image_url FROM order_items oi LEFT JOIN products p ON p.id = oi.product_id WHERE oi.order_id = ? ORDER BY oi.id ASC');
     $stmt->execute([$orderId]);
     return array_map(function($item) {
         return [
             'productId' => (string)$item['product_id'],
-            'name' => $item['product_name'] ?: $item['name'],
+            'name' => $item['product_name'] ?: ($item['name'] ?? 'Product'),
             'price' => (float)$item['unit_price'],
             'quantity' => (int)$item['quantity'],
-            'image' => $item['image_url'] ?? ''
+            'total' => (float)$item['total_price'],
+            'image' => $item['image_url'] ?? 'assets/haathub-logo.png'
         ];
     }, $stmt->fetchAll());
 }
@@ -58,16 +64,20 @@ if ($action === 'list') {
 
 if ($action === 'get') {
     $user = require_login();
-    $id = (int)($data['id'] ?? $_GET['id'] ?? 0);
-    $where = $user['role'] === 'admin' ? 'id = ?' : 'id = ? AND user_id = ?';
-    $params = $user['role'] === 'admin' ? [$id] : [$id, (int)$user['id']];
+    $rawId = $data['id'] ?? $_GET['id'] ?? 0;
+    $isNumericId = is_numeric($rawId);
+    if ($user['role'] === 'admin') {
+        $where = $isNumericId ? 'id = ?' : 'order_number = ?';
+        $params = [$rawId];
+    } else {
+        $where = ($isNumericId ? 'id = ?' : 'order_number = ?') . ' AND user_id = ?';
+        $params = [$rawId, (int)$user['id']];
+    }
     $stmt = db()->prepare("SELECT * FROM orders WHERE $where LIMIT 1");
     $stmt->execute($params);
     $row = $stmt->fetch();
     if (!$row) fail('Order not found.', 404);
-    $order = order_to_array($row);
-    $order['items'] = read_order_items((int)$row['id']);
-    ok(['order' => $order]);
+    ok(['order' => order_to_array($row, true)]);
 }
 
 if ($action === 'create') {
@@ -93,7 +103,8 @@ if ($action === 'create') {
         foreach ($items as $item) {
             $productId = (int)($item['productId'] ?? $item['product_id'] ?? 0);
             $qty = max(1, (int)($item['quantity'] ?? 1));
-            $stmt = $pdo->prepare('SELECT id, name, price, stock FROM products WHERE id = ? AND status = "active" FOR UPDATE');
+            $stmt = $pdo->prepare('SELECT p.id, p.name, COALESCE(active_sale.sale_price, p.price) AS price, p.stock
+                FROM products p ' . active_sale_join_sql() . ' WHERE p.id = ? AND p.status = "active" FOR UPDATE');
             $stmt->execute([$productId]);
             $product = $stmt->fetch();
             if (!$product) throw new RuntimeException('Product not available.');
@@ -126,9 +137,7 @@ if ($action === 'create') {
 
         $stmt = $pdo->prepare('SELECT * FROM orders WHERE id = ?');
         $stmt->execute([$orderId]);
-        $order = order_to_array($stmt->fetch());
-        $order['items'] = read_order_items($orderId);
-        ok(['order' => $order], 'Order placed successfully.');
+        ok(['order' => order_to_array($stmt->fetch(), true)], 'Order placed successfully.');
     } catch (Throwable $e) {
         $pdo->rollBack();
         fail($e->getMessage(), 400);
@@ -138,13 +147,15 @@ if ($action === 'create') {
 if ($action === 'update_status') {
     require_method(['POST']);
     require_admin();
-    $id = (int)($data['id'] ?? 0);
+    $rawId = $data['id'] ?? 0;
     $status = clean_string($data['status'] ?? '', 30);
     $allowed = ['pending','confirmed','packed','shipped','delivered','cancelled'];
     if (!in_array($status, $allowed, true)) fail('Invalid status.');
-    $deliveredSql = $status === 'delivered' ? ', delivered_at = NOW()' : '';
-    $stmt = db()->prepare("UPDATE orders SET status = ? $deliveredSql WHERE id = ?");
-    $stmt->execute([$status, $id]);
+    $isNumericId = is_numeric($rawId);
+    $where = $isNumericId ? 'id = ?' : 'order_number = ?';
+    $deliveredSql = $status === 'delivered' ? ', delivered_at = NOW()' : ', delivered_at = NULL';
+    $stmt = db()->prepare("UPDATE orders SET status = ? $deliveredSql WHERE $where");
+    $stmt->execute([$status, $rawId]);
     ok([], 'Order status updated.');
 }
 

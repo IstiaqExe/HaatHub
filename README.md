@@ -100,3 +100,21 @@ define('DB_PASS', '');
 - Passwords are stored with PHP `password_hash()`.
 - Admin-only API actions require an authenticated admin session.
 - The frontend has local fallback behavior, but live data comes from MySQL once the database is installed.
+
+## Latest functionality audit/fixes
+
+This ZIP includes a second-pass backend and admin-panel completion audit. The following areas were fixed or completed:
+
+- Fixed SQL seed import issue caused by a duplicate seeded user email.
+- Admin order details now open in a full modal with customer, phone, email, address, payment, item list, totals, timeline, notes and status update control.
+- Admin can update order status directly from the order details modal.
+- Flash sales now use real MySQL campaigns instead of demo-only cards.
+- Admin can create, edit, pause/resume and delete flash-sale campaigns.
+- Flash-sale product selection is saved in `flash_sale_products` and reflected in storefront pricing.
+- Product management now supports add, edit and soft-delete from the admin panel.
+- Settings tabs now save to the `settings` table instead of showing demo-only toast messages.
+- Admin/customer message sending uses the backend API.
+- Storefront message widget was fixed to prevent duplicate message API submissions.
+- Product listing now respects active flash-sale pricing based on campaign start/end time.
+
+If you installed an older version before this update, run `install.php` again or import `database/haathub.sql` again so the corrected schema/seed data is applied cleanly.

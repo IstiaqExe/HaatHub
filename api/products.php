@@ -10,6 +10,7 @@ if ($action === 'categories') {
 }
 
 if ($action === 'list') {
+    refresh_product_flash_flags();
     $where = ['p.status != "deleted"'];
     $params = [];
     if (!empty($_GET['category']) && $_GET['category'] !== 'all') {
@@ -22,15 +23,17 @@ if ($action === 'list') {
         $params[] = $term; $params[] = $term; $params[] = $term;
     }
     if (isset($_GET['flash_sale']) && $_GET['flash_sale'] === '1') {
-        $where[] = 'p.is_flash_sale = 1';
+        $where[] = 'active_sale.active_flash_sale_id IS NOT NULL';
     }
-    $sql = 'SELECT p.*, c.name AS category_name FROM products p LEFT JOIN categories c ON c.id = p.category_id WHERE ' . implode(' AND ', $where);
+    $sql = 'SELECT p.*, c.name AS category_name, active_sale.sale_price, active_sale.active_sale_discount, active_sale.active_sale_end_time, active_sale.active_flash_sale_id
+            FROM products p LEFT JOIN categories c ON c.id = p.category_id ' . active_sale_join_sql() . '
+            WHERE ' . implode(' AND ', $where);
     $sort = $_GET['sort'] ?? 'popularity';
     $sql .= match ($sort) {
-        'price-low' => ' ORDER BY p.price ASC',
-        'price-high' => ' ORDER BY p.price DESC',
+        'price-low' => ' ORDER BY COALESCE(active_sale.sale_price, p.price) ASC',
+        'price-high' => ' ORDER BY COALESCE(active_sale.sale_price, p.price) DESC',
         'rating' => ' ORDER BY p.rating DESC',
-        'discount' => ' ORDER BY p.discount_percent DESC',
+        'discount' => ' ORDER BY COALESCE(active_sale.active_sale_discount, p.discount_percent) DESC',
         default => ' ORDER BY p.reviews_count DESC, p.created_at DESC',
     };
     $stmt = db()->prepare($sql);
@@ -40,8 +43,10 @@ if ($action === 'list') {
 }
 
 if ($action === 'get') {
+    refresh_product_flash_flags();
     $id = (int)($data['id'] ?? $_GET['id'] ?? 0);
-    $stmt = db()->prepare('SELECT p.*, c.name AS category_name FROM products p LEFT JOIN categories c ON c.id = p.category_id WHERE p.id = ? AND p.status != "deleted" LIMIT 1');
+    $stmt = db()->prepare('SELECT p.*, c.name AS category_name, active_sale.sale_price, active_sale.active_sale_discount, active_sale.active_sale_end_time, active_sale.active_flash_sale_id
+        FROM products p LEFT JOIN categories c ON c.id = p.category_id ' . active_sale_join_sql() . ' WHERE p.id = ? AND p.status != "deleted" LIMIT 1');
     $stmt->execute([$id]);
     $row = $stmt->fetch();
     if (!$row) fail('Product not found.', 404);
@@ -62,30 +67,32 @@ if ($action === 'create' || $action === 'update') {
     $oldPrice = (float)($data['old_price'] ?? $data['oldPrice'] ?? 0);
     $discount = (int)($data['discount_percent'] ?? $data['discount'] ?? 0);
     $stock = (int)($data['stock'] ?? 0);
-    $imageUrl = clean_string($data['image_url'] ?? $data['image'] ?? '', 500);
+    $imageUrl = clean_string($data['image_url'] ?? $data['image'] ?? '', 700);
     $description = trim((string)($data['description'] ?? ''));
     $specs = $data['specs'] ?? [];
-    if (is_string($specs)) $specs = array_filter(array_map('trim', explode(',', $specs)));
+    if (is_string($specs)) $specs = array_filter(array_map('trim', preg_split('/[,\n]+/', $specs)));
     $specsJson = json_encode(array_values($specs), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     $rating = (float)($data['rating'] ?? 4.5);
     $reviews = (int)($data['reviews_count'] ?? $data['reviews'] ?? 0);
-    $isFlash = !empty($data['is_flash_sale']) || !empty($data['isFlashSale']);
-    $flashEnd = $data['flash_sale_end_time'] ?? $data['flashSaleEndTime'] ?? null;
     $status = clean_string($data['status'] ?? 'active', 30);
+    if (!in_array($status, ['active','inactive','deleted'], true)) $status = 'active';
 
     if ($name === '' || !$categoryId || $price <= 0) fail('Product name, category and price are required.');
+    if ($stock < 0) fail('Stock cannot be negative.');
 
     if ($action === 'create') {
-        $stmt = db()->prepare('INSERT INTO products (category_id, name, slug, description, specs, price, old_price, discount_percent, stock, image_url, rating, reviews_count, is_flash_sale, flash_sale_end_time, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
-        $stmt->execute([$categoryId, $name, slugify($name), $description, $specsJson, $price, $oldPrice, $discount, $stock, $imageUrl, $rating, $reviews, $isFlash ? 1 : 0, $flashEnd, $status]);
+        $stmt = db()->prepare('INSERT INTO products (category_id, name, slug, description, specs, price, old_price, discount_percent, stock, image_url, rating, reviews_count, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+        $stmt->execute([$categoryId, $name, unique_slug('products', $name), $description, $specsJson, $price, $oldPrice, $discount, $stock, $imageUrl, $rating, $reviews, $status]);
         $id = (int)db()->lastInsertId();
     } else {
         if ($id <= 0) fail('Product ID is required.');
-        $stmt = db()->prepare('UPDATE products SET category_id=?, name=?, slug=?, description=?, specs=?, price=?, old_price=?, discount_percent=?, stock=?, image_url=?, rating=?, reviews_count=?, is_flash_sale=?, flash_sale_end_time=?, status=? WHERE id=?');
-        $stmt->execute([$categoryId, $name, slugify($name), $description, $specsJson, $price, $oldPrice, $discount, $stock, $imageUrl, $rating, $reviews, $isFlash ? 1 : 0, $flashEnd, $status, $id]);
+        $stmt = db()->prepare('UPDATE products SET category_id=?, name=?, slug=?, description=?, specs=?, price=?, old_price=?, discount_percent=?, stock=?, image_url=?, rating=?, reviews_count=?, status=? WHERE id=?');
+        $stmt->execute([$categoryId, $name, unique_slug('products', $name, $id), $description, $specsJson, $price, $oldPrice, $discount, $stock, $imageUrl, $rating, $reviews, $status, $id]);
     }
 
-    $stmt = db()->prepare('SELECT p.*, c.name AS category_name FROM products p LEFT JOIN categories c ON c.id=p.category_id WHERE p.id=?');
+    refresh_product_flash_flags();
+    $stmt = db()->prepare('SELECT p.*, c.name AS category_name, active_sale.sale_price, active_sale.active_sale_discount, active_sale.active_sale_end_time, active_sale.active_flash_sale_id
+        FROM products p LEFT JOIN categories c ON c.id = p.category_id ' . active_sale_join_sql() . ' WHERE p.id=? LIMIT 1');
     $stmt->execute([$id]);
     ok(['product' => product_row_to_frontend($stmt->fetch())], $action === 'create' ? 'Product created.' : 'Product updated.');
 }
@@ -99,4 +106,4 @@ if ($action === 'delete') {
     ok([], 'Product deleted.');
 }
 
-fail('Unknown products action.', 404);
+fail('Unknown product action.', 404);
