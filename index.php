@@ -79,21 +79,7 @@
         </div>
 
         <!-- Categories Bar -->
-        <div class="categories-bar desktop-only">
-            <div class="container">
-                <div class="categories-scroll">
-                    <button class="category-link active" onclick="filterByCategory('all')">All Categories</button>
-                    <button class="category-link" onclick="filterByCategory('Electronics')">Electronics</button>
-                    <button class="category-link" onclick="filterByCategory('Fashion')">Fashion</button>
-                    <button class="category-link" onclick="filterByCategory('Home & Living')">Home & Living</button>
-                    <button class="category-link" onclick="filterByCategory('Beauty')">Beauty</button>
-                    <button class="category-link" onclick="filterByCategory('Sports')">Sports</button>
-                    <button class="category-link flash-sale-link" onclick="navigateTo('products', {flashSale: true})">
-                        <svg class="icon-xs" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                        Flash Sales
-                    </button>
-                </div>
-            </div>
+        <!-- categories bar removed -->
         </div>
     </header>
 
